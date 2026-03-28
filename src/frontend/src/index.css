@@ -51,6 +51,12 @@
   * {
     @apply border-border;
   }
+  /* Fallback for browsers that don't support oklch */
+  html,
+  body {
+    background-color: #ffffff;
+    color: #000080;
+  }
   body {
     @apply bg-background text-foreground font-sans;
   }
@@ -67,15 +73,18 @@
 
 /* Button gradient */
 .btn-gradient {
+  background: #000080;
   background: oklch(0.25 0.2 264);
 }
 
 .btn-gradient:hover {
+  background: #0000a0;
   background: oklch(0.32 0.2 264);
 }
 
 /* Hero gradient background */
 .hero-bg {
+  background: linear-gradient(135deg, #e8e8f5 0%, #ffffff 100%);
   background: linear-gradient(
     135deg,
     oklch(0.93 0.015 264) 0%,

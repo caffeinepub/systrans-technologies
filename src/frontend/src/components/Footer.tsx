@@ -57,7 +57,7 @@ export default function Footer() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
                 <a
-                  href="/#why-us"
+                  href="/#about"
                   className="hover:text-accent transition-colors"
                 >
                   About Us

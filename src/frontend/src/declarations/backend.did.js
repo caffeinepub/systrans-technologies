@@ -25,12 +25,35 @@ export const UserRole = IDL.Variant({
   'guest' : IDL.Null,
 });
 export const Time = IDL.Int;
+export const TimesheetEntry = IDL.Record({
+  'id' : IDL.Text,
+  'date' : IDL.Text,
+  'checkInTime' : IDL.Opt(Time),
+  'employeeId' : IDL.Text,
+  'checkOutTime' : IDL.Opt(Time),
+});
 export const CustomMailTemplate = IDL.Record({
   'id' : IDL.Text,
   'subject' : IDL.Text,
   'body' : IDL.Text,
   'name' : IDL.Text,
   'createdAt' : Time,
+});
+export const Employee = IDL.Record({
+  'dob' : IDL.Text,
+  'salary' : IDL.Text,
+  'role' : IDL.Text,
+  'dateOfJoining' : IDL.Text,
+  'employeeId' : IDL.Text,
+  'aadharNumber' : IDL.Text,
+  'address' : IDL.Text,
+  'panNumber' : IDL.Text,
+  'passwordHash' : IDL.Text,
+  'pincode' : IDL.Text,
+  'position' : IDL.Text,
+  'lastName' : IDL.Text,
+  'maritalStatus' : IDL.Text,
+  'firstName' : IDL.Text,
 });
 export const JobPosition = IDL.Record({
   'id' : IDL.Text,
@@ -41,6 +64,16 @@ export const JobPosition = IDL.Record({
   'isActive' : IDL.Bool,
   'department' : IDL.Text,
   'location' : IDL.Text,
+});
+export const Ticket = IDL.Record({
+  'status' : IDL.Text,
+  'createdAt' : Time,
+  'description' : IDL.Text,
+  'ticketNumber' : IDL.Text,
+  'notes' : IDL.Text,
+  'category' : IDL.Text,
+  'raisedBy' : IDL.Text,
+  'resolvedAt' : IDL.Opt(Time),
 });
 export const ContactFormSubmission = IDL.Record({
   'name' : IDL.Text,
@@ -108,14 +141,30 @@ export const idlService = IDL.Service({
   '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'changeEmployeePassword' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Bool],
+      [],
+    ),
+  'checkIn' : IDL.Func([IDL.Text, IDL.Text], [TimesheetEntry], []),
+  'checkOut' : IDL.Func([IDL.Text, IDL.Text], [IDL.Opt(TimesheetEntry)], []),
   'createCustomMailTemplate' : IDL.Func(
       [CustomMailTemplate],
       [CustomMailTemplate],
       [],
     ),
+  'createEmployee' : IDL.Func([Employee], [Employee], []),
   'createJobPosition' : IDL.Func([JobPosition], [JobPosition], []),
+  'createTicket' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [Ticket], []),
   'deleteCustomMailTemplate' : IDL.Func([IDL.Nat], [], []),
+  'deleteEmployee' : IDL.Func([IDL.Text], [IDL.Bool], []),
   'deleteJobPosition' : IDL.Func([IDL.Nat], [], []),
+  'employeeLogin' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [IDL.Opt(Employee)],
+      ['query'],
+    ),
+  'getAdminPasswordHash' : IDL.Func([], [IDL.Text], ['query']),
   'getAllActiveJobPositions' : IDL.Func([], [IDL.Vec(JobPosition)], ['query']),
   'getAllContactSubmissions' : IDL.Func(
       [],
@@ -127,13 +176,28 @@ export const idlService = IDL.Service({
       [IDL.Vec(CustomMailTemplate)],
       ['query'],
     ),
+  'getAllEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
   'getAllJobApplications' : IDL.Func([], [IDL.Vec(JobApplication)], ['query']),
   'getAllJobPositions' : IDL.Func([], [IDL.Vec(JobPosition)], ['query']),
   'getAllROINewLeads' : IDL.Func([], [IDL.Vec(ROINewLead)], ['query']),
+  'getAllTickets' : IDL.Func([], [IDL.Vec(Ticket)], ['query']),
+  'getAllTimesheets' : IDL.Func([], [IDL.Vec(TimesheetEntry)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getEmployee' : IDL.Func([IDL.Text], [IDL.Opt(Employee)], ['query']),
   'getJobPosition' : IDL.Func([IDL.Nat], [IDL.Opt(JobPosition)], ['query']),
   'getMailConfig' : IDL.Func([], [IDL.Opt(MailConfig)], ['query']),
+  'getTicketsByEmployee' : IDL.Func([IDL.Text], [IDL.Vec(Ticket)], ['query']),
+  'getTimesheetByEmployee' : IDL.Func(
+      [IDL.Text],
+      [IDL.Vec(TimesheetEntry)],
+      ['query'],
+    ),
+  'getTodayTimesheetEntry' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [IDL.Opt(TimesheetEntry)],
+      ['query'],
+    ),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
@@ -141,12 +205,20 @@ export const idlService = IDL.Service({
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'setAdminPasswordHash' : IDL.Func([IDL.Text], [], []),
   'setMailConfig' : IDL.Func([MailConfig], [], []),
   'submitContactForm' : IDL.Func([ContactFormSubmission], [], []),
   'submitJobApplication' : IDL.Func([JobApplication], [], []),
   'submitROILead' : IDL.Func([ROINewLead], [], []),
   'updateCustomMailTemplate' : IDL.Func([IDL.Nat, CustomMailTemplate], [], []),
+  'updateEmployee' : IDL.Func([IDL.Text, Employee], [IDL.Bool], []),
   'updateJobPosition' : IDL.Func([IDL.Nat, JobPosition], [], []),
+  'updateTicketStatus' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Bool],
+      [],
+    ),
+  'verifyAdminPassword' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
 });
 
 export const idlInitArgs = [];
@@ -169,12 +241,35 @@ export const idlFactory = ({ IDL }) => {
     'guest' : IDL.Null,
   });
   const Time = IDL.Int;
+  const TimesheetEntry = IDL.Record({
+    'id' : IDL.Text,
+    'date' : IDL.Text,
+    'checkInTime' : IDL.Opt(Time),
+    'employeeId' : IDL.Text,
+    'checkOutTime' : IDL.Opt(Time),
+  });
   const CustomMailTemplate = IDL.Record({
     'id' : IDL.Text,
     'subject' : IDL.Text,
     'body' : IDL.Text,
     'name' : IDL.Text,
     'createdAt' : Time,
+  });
+  const Employee = IDL.Record({
+    'dob' : IDL.Text,
+    'salary' : IDL.Text,
+    'role' : IDL.Text,
+    'dateOfJoining' : IDL.Text,
+    'employeeId' : IDL.Text,
+    'aadharNumber' : IDL.Text,
+    'address' : IDL.Text,
+    'panNumber' : IDL.Text,
+    'passwordHash' : IDL.Text,
+    'pincode' : IDL.Text,
+    'position' : IDL.Text,
+    'lastName' : IDL.Text,
+    'maritalStatus' : IDL.Text,
+    'firstName' : IDL.Text,
   });
   const JobPosition = IDL.Record({
     'id' : IDL.Text,
@@ -185,6 +280,16 @@ export const idlFactory = ({ IDL }) => {
     'isActive' : IDL.Bool,
     'department' : IDL.Text,
     'location' : IDL.Text,
+  });
+  const Ticket = IDL.Record({
+    'status' : IDL.Text,
+    'createdAt' : Time,
+    'description' : IDL.Text,
+    'ticketNumber' : IDL.Text,
+    'notes' : IDL.Text,
+    'category' : IDL.Text,
+    'raisedBy' : IDL.Text,
+    'resolvedAt' : IDL.Opt(Time),
   });
   const ContactFormSubmission = IDL.Record({
     'name' : IDL.Text,
@@ -249,14 +354,30 @@ export const idlFactory = ({ IDL }) => {
     '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'changeEmployeePassword' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Bool],
+        [],
+      ),
+    'checkIn' : IDL.Func([IDL.Text, IDL.Text], [TimesheetEntry], []),
+    'checkOut' : IDL.Func([IDL.Text, IDL.Text], [IDL.Opt(TimesheetEntry)], []),
     'createCustomMailTemplate' : IDL.Func(
         [CustomMailTemplate],
         [CustomMailTemplate],
         [],
       ),
+    'createEmployee' : IDL.Func([Employee], [Employee], []),
     'createJobPosition' : IDL.Func([JobPosition], [JobPosition], []),
+    'createTicket' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [Ticket], []),
     'deleteCustomMailTemplate' : IDL.Func([IDL.Nat], [], []),
+    'deleteEmployee' : IDL.Func([IDL.Text], [IDL.Bool], []),
     'deleteJobPosition' : IDL.Func([IDL.Nat], [], []),
+    'employeeLogin' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Opt(Employee)],
+        ['query'],
+      ),
+    'getAdminPasswordHash' : IDL.Func([], [IDL.Text], ['query']),
     'getAllActiveJobPositions' : IDL.Func(
         [],
         [IDL.Vec(JobPosition)],
@@ -272,6 +393,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(CustomMailTemplate)],
         ['query'],
       ),
+    'getAllEmployees' : IDL.Func([], [IDL.Vec(Employee)], ['query']),
     'getAllJobApplications' : IDL.Func(
         [],
         [IDL.Vec(JobApplication)],
@@ -279,10 +401,24 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getAllJobPositions' : IDL.Func([], [IDL.Vec(JobPosition)], ['query']),
     'getAllROINewLeads' : IDL.Func([], [IDL.Vec(ROINewLead)], ['query']),
+    'getAllTickets' : IDL.Func([], [IDL.Vec(Ticket)], ['query']),
+    'getAllTimesheets' : IDL.Func([], [IDL.Vec(TimesheetEntry)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getEmployee' : IDL.Func([IDL.Text], [IDL.Opt(Employee)], ['query']),
     'getJobPosition' : IDL.Func([IDL.Nat], [IDL.Opt(JobPosition)], ['query']),
     'getMailConfig' : IDL.Func([], [IDL.Opt(MailConfig)], ['query']),
+    'getTicketsByEmployee' : IDL.Func([IDL.Text], [IDL.Vec(Ticket)], ['query']),
+    'getTimesheetByEmployee' : IDL.Func(
+        [IDL.Text],
+        [IDL.Vec(TimesheetEntry)],
+        ['query'],
+      ),
+    'getTodayTimesheetEntry' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Opt(TimesheetEntry)],
+        ['query'],
+      ),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
@@ -290,6 +426,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'setAdminPasswordHash' : IDL.Func([IDL.Text], [], []),
     'setMailConfig' : IDL.Func([MailConfig], [], []),
     'submitContactForm' : IDL.Func([ContactFormSubmission], [], []),
     'submitJobApplication' : IDL.Func([JobApplication], [], []),
@@ -299,7 +436,14 @@ export const idlFactory = ({ IDL }) => {
         [],
         [],
       ),
+    'updateEmployee' : IDL.Func([IDL.Text, Employee], [IDL.Bool], []),
     'updateJobPosition' : IDL.Func([IDL.Nat, JobPosition], [], []),
+    'updateTicketStatus' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Bool],
+        [],
+      ),
+    'verifyAdminPassword' : IDL.Func([IDL.Text], [IDL.Bool], ['query']),
   });
 };
 

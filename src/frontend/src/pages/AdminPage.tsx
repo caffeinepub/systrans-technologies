@@ -1698,19 +1698,19 @@ function MailConfigTab() {
 }
 
 function ChangePasswordTab() {
+  const { actor: _cpActor } = useActor();
+  const actor = _cpActor as unknown as FullBackendInterface | null;
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const handleChange = (e: React.FormEvent) => {
+  const handleChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    const storedPwd =
-      localStorage.getItem("admin_password") || "Kumaresh@436314";
-    if (currentPwd !== storedPwd) {
-      setError("Current password is incorrect.");
+    if (!actor) {
+      setError("Connecting to server, please try again.");
       return;
     }
     if (newPwd.length < 8) {
@@ -1721,12 +1721,23 @@ function ChangePasswordTab() {
       setError("New password and confirmation do not match.");
       return;
     }
-
-    localStorage.setItem("admin_password", newPwd);
-    toast.success("Password changed successfully!");
-    setCurrentPwd("");
-    setNewPwd("");
-    setConfirmPwd("");
+    setSaving(true);
+    try {
+      const valid = await actor.verifyAdminPassword(currentPwd);
+      if (!valid) {
+        setError("Current password is incorrect.");
+        return;
+      }
+      await actor.setAdminPasswordHash(newPwd);
+      toast.success("Password changed successfully!");
+      setCurrentPwd("");
+      setNewPwd("");
+      setConfirmPwd("");
+    } catch {
+      setError("Failed to change password. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -1799,10 +1810,20 @@ function ChangePasswordTab() {
         <Button
           type="submit"
           className="btn-gradient text-white w-full font-semibold"
+          disabled={saving || !actor}
           data-ocid="admin.change_password.submit.button"
         >
-          <Lock className="w-4 h-4 mr-2" />
-          Update Password
+          {saving ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Updating...
+            </>
+          ) : (
+            <>
+              <Lock className="w-4 h-4 mr-2" />
+              Update Password
+            </>
+          )}
         </Button>
       </form>
     </div>
@@ -2631,22 +2652,33 @@ function AdminTicketsTab() {
 }
 
 export default function AdminPage() {
+  const { actor: _loginActor, isFetching: actorFetching } = useActor();
+  const loginActor = _loginActor as unknown as FullBackendInterface | null;
   const [loggedIn, setLoggedIn] = useState(
     () => localStorage.getItem("admin_logged_in") === "true",
   );
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
 
-  const handleLogin = () => {
-    const storedPwd =
-      localStorage.getItem("admin_password") || "Kumaresh@436314";
-    if (username === "SysTrans" && password === storedPwd) {
-      localStorage.setItem("admin_logged_in", "true");
-      setLoggedIn(true);
-      setLoginError(false);
-    } else {
+  const handleLogin = async () => {
+    if (!loginActor) return;
+    setLoginLoading(true);
+    setLoginError(false);
+    try {
+      const valid = await loginActor.verifyAdminPassword(password);
+      if (username === "SysTrans" && valid) {
+        localStorage.setItem("admin_logged_in", "true");
+        setLoggedIn(true);
+        setLoginError(false);
+      } else {
+        setLoginError(true);
+      }
+    } catch {
       setLoginError(true);
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -2687,7 +2719,13 @@ export default function AdminPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Username"
                 data-ocid="admin.login.input"
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  !loginLoading &&
+                  !actorFetching &&
+                  loginActor &&
+                  handleLogin()
+                }
               />
             </div>
             <div>
@@ -2698,7 +2736,13 @@ export default function AdminPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password"
                 data-ocid="admin.login.password.input"
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  !loginLoading &&
+                  !actorFetching &&
+                  loginActor &&
+                  handleLogin()
+                }
               />
             </div>
             {loginError && (
@@ -2712,9 +2756,17 @@ export default function AdminPage() {
             <Button
               className="btn-gradient text-white w-full font-semibold"
               onClick={handleLogin}
+              disabled={loginLoading || actorFetching || !loginActor}
               data-ocid="admin.login.button"
             >
-              Login
+              {loginLoading || actorFetching ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {actorFetching ? "Connecting..." : "Logging in..."}
+                </>
+              ) : (
+                "Login"
+              )}
             </Button>
           </div>
         </motion.div>

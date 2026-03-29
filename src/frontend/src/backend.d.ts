@@ -7,20 +7,6 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
-export interface MailConfig {
-    contactTemplate: MailTemplate;
-    roiTemplate: MailTemplate;
-}
-export interface JobPosition {
-    id: string;
-    title: string;
-    salary: bigint;
-    createdAt: Time;
-    description: string;
-    isActive: boolean;
-    department: string;
-    location: string;
-}
 export interface CustomMailTemplate {
     id: string;
     subject: string;
@@ -29,6 +15,34 @@ export interface CustomMailTemplate {
     createdAt: Time;
 }
 export type Time = bigint;
+export interface TimesheetEntry {
+    id: string;
+    date: string;
+    checkInTime?: Time;
+    employeeId: string;
+    checkOutTime?: Time;
+}
+export interface JobApplication {
+    yearsOfExperience: string;
+    appliedAt: Time;
+    applicantName: string;
+    jobId: string;
+    resumeFileId: string;
+    email: string;
+    expectedCTC: string;
+    currentCTC: string;
+}
+export interface MailConfig {
+    contactTemplate: MailTemplate;
+    roiTemplate: MailTemplate;
+}
+export interface ContactFormSubmission {
+    name: string;
+    submittedAt: Time;
+    email: string;
+    message: string;
+    phone: string;
+}
 export interface MailTemplate {
     subject: string;
     body: string;
@@ -43,58 +57,44 @@ export interface ROINewLead {
     calculatedGain: string;
     monthlyRevenue: string;
 }
-export interface ContactFormSubmission {
-    name: string;
-    submittedAt: Time;
-    email: string;
-    message: string;
-    phone: string;
+export interface Employee {
+    dob: string;
+    salary: string;
+    role: string;
+    dateOfJoining: string;
+    employeeId: string;
+    aadharNumber: string;
+    address: string;
+    panNumber: string;
+    passwordHash: string;
+    pincode: string;
+    position: string;
+    lastName: string;
+    maritalStatus: string;
+    firstName: string;
 }
-export interface JobApplication {
-    yearsOfExperience: string;
-    appliedAt: Time;
-    applicantName: string;
-    jobId: string;
-    resumeFileId: string;
-    email: string;
-    expectedCTC: string;
-    currentCTC: string;
+export interface Ticket {
+    status: string;
+    createdAt: Time;
+    description: string;
+    ticketNumber: string;
+    notes: string;
+    category: string;
+    raisedBy: string;
+    resolvedAt?: Time;
 }
 export interface UserProfile {
     name: string;
 }
-export interface Employee {
-    employeeId: string;
-    passwordHash: string;
-    firstName: string;
-    lastName: string;
-    dob: string;
-    maritalStatus: string;
-    address: string;
-    pincode: string;
-    panNumber: string;
-    aadharNumber: string;
-    dateOfJoining: string;
-    role: string;
-    position: string;
-    salary: string;
-}
-export interface TimesheetEntry {
+export interface JobPosition {
     id: string;
-    employeeId: string;
-    checkInTime: Time | null;
-    checkOutTime: Time | null;
-    date: string;
-}
-export interface Ticket {
-    ticketNumber: string;
-    raisedBy: string;
-    category: string;
-    description: string;
-    status: string;
+    title: string;
+    salary: bigint;
     createdAt: Time;
-    resolvedAt: Time | null;
-    notes: string;
+    description: string;
+    isActive: boolean;
+    department: string;
+    location: string;
 }
 export enum UserRole {
     admin = "admin",
@@ -103,46 +103,46 @@ export enum UserRole {
 }
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+    changeEmployeePassword(employeeId: string, oldPassword: string, newPassword: string): Promise<boolean>;
+    checkIn(employeeId: string, date: string): Promise<TimesheetEntry>;
+    checkOut(employeeId: string, date: string): Promise<TimesheetEntry | null>;
     createCustomMailTemplate(input: CustomMailTemplate): Promise<CustomMailTemplate>;
+    createEmployee(input: Employee): Promise<Employee>;
     createJobPosition(input: JobPosition): Promise<JobPosition>;
+    createTicket(employeeId: string, category: string, description: string): Promise<Ticket>;
     deleteCustomMailTemplate(id: bigint): Promise<void>;
+    deleteEmployee(id: string): Promise<boolean>;
     deleteJobPosition(id: bigint): Promise<void>;
+    employeeLogin(employeeId: string, password: string): Promise<Employee | null>;
+    getAdminPasswordHash(): Promise<string>;
     getAllActiveJobPositions(): Promise<Array<JobPosition>>;
     getAllContactSubmissions(): Promise<Array<ContactFormSubmission>>;
     getAllCustomMailTemplates(): Promise<Array<CustomMailTemplate>>;
+    getAllEmployees(): Promise<Array<Employee>>;
     getAllJobApplications(): Promise<Array<JobApplication>>;
     getAllJobPositions(): Promise<Array<JobPosition>>;
     getAllROINewLeads(): Promise<Array<ROINewLead>>;
+    getAllTickets(): Promise<Array<Ticket>>;
+    getAllTimesheets(): Promise<Array<TimesheetEntry>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
+    getEmployee(id: string): Promise<Employee | null>;
     getJobPosition(id: bigint): Promise<JobPosition | null>;
     getMailConfig(): Promise<MailConfig | null>;
+    getTicketsByEmployee(employeeId: string): Promise<Array<Ticket>>;
+    getTimesheetByEmployee(employeeId: string): Promise<Array<TimesheetEntry>>;
+    getTodayTimesheetEntry(employeeId: string, date: string): Promise<TimesheetEntry | null>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    setAdminPasswordHash(newHash: string): Promise<void>;
     setMailConfig(config: MailConfig): Promise<void>;
     submitContactForm(submission: ContactFormSubmission): Promise<void>;
     submitJobApplication(application: JobApplication): Promise<void>;
     submitROILead(roi: ROINewLead): Promise<void>;
     updateCustomMailTemplate(id: bigint, template: CustomMailTemplate): Promise<void>;
-    updateJobPosition(id: bigint, position: JobPosition): Promise<void>;
-    // Employee
-    createEmployee(input: Employee): Promise<Employee>;
-    getAllEmployees(): Promise<Array<Employee>>;
-    getEmployee(id: string): Promise<Employee | null>;
     updateEmployee(id: string, data: Employee): Promise<boolean>;
-    deleteEmployee(id: string): Promise<boolean>;
-    employeeLogin(employeeId: string, password: string): Promise<Employee | null>;
-    changeEmployeePassword(employeeId: string, oldPassword: string, newPassword: string): Promise<boolean>;
-    // Timesheet
-    checkIn(employeeId: string, date: string): Promise<TimesheetEntry>;
-    checkOut(employeeId: string, date: string): Promise<TimesheetEntry | null>;
-    getTodayTimesheetEntry(employeeId: string, date: string): Promise<TimesheetEntry | null>;
-    getTimesheetByEmployee(employeeId: string): Promise<Array<TimesheetEntry>>;
-    getAllTimesheets(): Promise<Array<TimesheetEntry>>;
-    // Tickets
-    createTicket(employeeId: string, category: string, description: string): Promise<Ticket>;
-    getAllTickets(): Promise<Array<Ticket>>;
-    getTicketsByEmployee(employeeId: string): Promise<Array<Ticket>>;
+    updateJobPosition(id: bigint, position: JobPosition): Promise<void>;
     updateTicketStatus(ticketNumber: string, status: string, notes: string): Promise<boolean>;
+    verifyAdminPassword(password: string): Promise<boolean>;
 }

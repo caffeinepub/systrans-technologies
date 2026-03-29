@@ -24,6 +24,22 @@ export interface CustomMailTemplate {
   'name' : string,
   'createdAt' : Time,
 }
+export interface Employee {
+  'dob' : string,
+  'salary' : string,
+  'role' : string,
+  'dateOfJoining' : string,
+  'employeeId' : string,
+  'aadharNumber' : string,
+  'address' : string,
+  'panNumber' : string,
+  'passwordHash' : string,
+  'pincode' : string,
+  'position' : string,
+  'lastName' : string,
+  'maritalStatus' : string,
+  'firstName' : string,
+}
 export interface JobApplication {
   'yearsOfExperience' : string,
   'appliedAt' : Time,
@@ -59,7 +75,24 @@ export interface ROINewLead {
   'calculatedGain' : string,
   'monthlyRevenue' : string,
 }
+export interface Ticket {
+  'status' : string,
+  'createdAt' : Time,
+  'description' : string,
+  'ticketNumber' : string,
+  'notes' : string,
+  'category' : string,
+  'raisedBy' : string,
+  'resolvedAt' : [] | [Time],
+}
 export type Time = bigint;
+export interface TimesheetEntry {
+  'id' : string,
+  'date' : string,
+  'checkInTime' : [] | [Time],
+  'employeeId' : string,
+  'checkOutTime' : [] | [Time],
+}
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -93,26 +126,45 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'changeEmployeePassword' : ActorMethod<[string, string, string], boolean>,
+  'checkIn' : ActorMethod<[string, string], TimesheetEntry>,
+  'checkOut' : ActorMethod<[string, string], [] | [TimesheetEntry]>,
   'createCustomMailTemplate' : ActorMethod<
     [CustomMailTemplate],
     CustomMailTemplate
   >,
+  'createEmployee' : ActorMethod<[Employee], Employee>,
   'createJobPosition' : ActorMethod<[JobPosition], JobPosition>,
+  'createTicket' : ActorMethod<[string, string, string], Ticket>,
   'deleteCustomMailTemplate' : ActorMethod<[bigint], undefined>,
+  'deleteEmployee' : ActorMethod<[string], boolean>,
   'deleteJobPosition' : ActorMethod<[bigint], undefined>,
+  'employeeLogin' : ActorMethod<[string, string], [] | [Employee]>,
+  'getAdminPasswordHash' : ActorMethod<[], string>,
   'getAllActiveJobPositions' : ActorMethod<[], Array<JobPosition>>,
   'getAllContactSubmissions' : ActorMethod<[], Array<ContactFormSubmission>>,
   'getAllCustomMailTemplates' : ActorMethod<[], Array<CustomMailTemplate>>,
+  'getAllEmployees' : ActorMethod<[], Array<Employee>>,
   'getAllJobApplications' : ActorMethod<[], Array<JobApplication>>,
   'getAllJobPositions' : ActorMethod<[], Array<JobPosition>>,
   'getAllROINewLeads' : ActorMethod<[], Array<ROINewLead>>,
+  'getAllTickets' : ActorMethod<[], Array<Ticket>>,
+  'getAllTimesheets' : ActorMethod<[], Array<TimesheetEntry>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getEmployee' : ActorMethod<[string], [] | [Employee]>,
   'getJobPosition' : ActorMethod<[bigint], [] | [JobPosition]>,
   'getMailConfig' : ActorMethod<[], [] | [MailConfig]>,
+  'getTicketsByEmployee' : ActorMethod<[string], Array<Ticket>>,
+  'getTimesheetByEmployee' : ActorMethod<[string], Array<TimesheetEntry>>,
+  'getTodayTimesheetEntry' : ActorMethod<
+    [string, string],
+    [] | [TimesheetEntry]
+  >,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setAdminPasswordHash' : ActorMethod<[string], undefined>,
   'setMailConfig' : ActorMethod<[MailConfig], undefined>,
   'submitContactForm' : ActorMethod<[ContactFormSubmission], undefined>,
   'submitJobApplication' : ActorMethod<[JobApplication], undefined>,
@@ -121,7 +173,10 @@ export interface _SERVICE {
     [bigint, CustomMailTemplate],
     undefined
   >,
+  'updateEmployee' : ActorMethod<[string, Employee], boolean>,
   'updateJobPosition' : ActorMethod<[bigint, JobPosition], undefined>,
+  'updateTicketStatus' : ActorMethod<[string, string, string], boolean>,
+  'verifyAdminPassword' : ActorMethod<[string], boolean>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

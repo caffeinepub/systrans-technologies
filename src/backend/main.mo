@@ -106,7 +106,6 @@ actor {
     name : Text;
   };
 
-  // Employee types
   public type Employee = {
     employeeId : Text;
     passwordHash : Text;
@@ -143,24 +142,24 @@ actor {
     notes : Text;
   };
 
-  // Persistent state
+  // Persistent state (stable so data survives upgrades)
   var nextJobId = 0;
   var nextTemplateId = 0;
   var nextEmployeeId = 0;
   var nextTimesheetId = 0;
   var nextTicketId = 0;
   let jobPositions = Map.empty<Nat, JobPosition>();
-  let contactFormSubmissions = List.empty<ContactFormSubmission>();
-  let roiLeads = List.empty<ROINewLead>();
-  let jobApplications = List.empty<JobApplication>();
+  var contactFormSubmissions = List.empty<ContactFormSubmission>();
+  var roiLeads = List.empty<ROINewLead>();
+  var jobApplications = List.empty<JobApplication>();
   var mailConfig : ?MailConfig = null;
   let customMailTemplates = Map.empty<Nat, CustomMailTemplate>();
   let userProfiles = Map.empty<Principal, UserProfile>();
   let employees = Map.empty<Text, Employee>();
   let timesheetEntries = Map.empty<Text, TimesheetEntry>();
   let tickets = Map.empty<Text, Ticket>();
+  var adminPasswordHash : Text = "Kumaresh@436314";
 
-  // Helper: format sequential IDs
   func formatEmployeeId(n : Nat) : Text {
     let s = n.toText();
     if (s.size() == 1) { "SYS00" # s }
@@ -179,7 +178,7 @@ actor {
     "TS" # n.toText();
   };
 
-  // User Profile Management (kept for MixinAuthorization compatibility)
+  // User Profile
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     userProfiles.get(caller);
   };
@@ -433,5 +432,18 @@ actor {
         true;
       };
     };
+  };
+
+  // Admin Password
+  public query func getAdminPasswordHash() : async Text {
+    adminPasswordHash;
+  };
+
+  public shared func setAdminPasswordHash(newHash : Text) : async () {
+    adminPasswordHash := newHash;
+  };
+
+  public query func verifyAdminPassword(password : Text) : async Bool {
+    password == adminPasswordHash;
   };
 };

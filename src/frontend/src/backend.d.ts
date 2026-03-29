@@ -63,6 +63,39 @@ export interface JobApplication {
 export interface UserProfile {
     name: string;
 }
+export interface Employee {
+    employeeId: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
+    dob: string;
+    maritalStatus: string;
+    address: string;
+    pincode: string;
+    panNumber: string;
+    aadharNumber: string;
+    dateOfJoining: string;
+    role: string;
+    position: string;
+    salary: string;
+}
+export interface TimesheetEntry {
+    id: string;
+    employeeId: string;
+    checkInTime: Time | null;
+    checkOutTime: Time | null;
+    date: string;
+}
+export interface Ticket {
+    ticketNumber: string;
+    raisedBy: string;
+    category: string;
+    description: string;
+    status: string;
+    createdAt: Time;
+    resolvedAt: Time | null;
+    notes: string;
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
@@ -93,4 +126,23 @@ export interface backendInterface {
     submitROILead(roi: ROINewLead): Promise<void>;
     updateCustomMailTemplate(id: bigint, template: CustomMailTemplate): Promise<void>;
     updateJobPosition(id: bigint, position: JobPosition): Promise<void>;
+    // Employee
+    createEmployee(input: Employee): Promise<Employee>;
+    getAllEmployees(): Promise<Array<Employee>>;
+    getEmployee(id: string): Promise<Employee | null>;
+    updateEmployee(id: string, data: Employee): Promise<boolean>;
+    deleteEmployee(id: string): Promise<boolean>;
+    employeeLogin(employeeId: string, password: string): Promise<Employee | null>;
+    changeEmployeePassword(employeeId: string, oldPassword: string, newPassword: string): Promise<boolean>;
+    // Timesheet
+    checkIn(employeeId: string, date: string): Promise<TimesheetEntry>;
+    checkOut(employeeId: string, date: string): Promise<TimesheetEntry | null>;
+    getTodayTimesheetEntry(employeeId: string, date: string): Promise<TimesheetEntry | null>;
+    getTimesheetByEmployee(employeeId: string): Promise<Array<TimesheetEntry>>;
+    getAllTimesheets(): Promise<Array<TimesheetEntry>>;
+    // Tickets
+    createTicket(employeeId: string, category: string, description: string): Promise<Ticket>;
+    getAllTickets(): Promise<Array<Ticket>>;
+    getTicketsByEmployee(employeeId: string): Promise<Array<Ticket>>;
+    updateTicketStatus(ticketNumber: string, status: string, notes: string): Promise<boolean>;
 }

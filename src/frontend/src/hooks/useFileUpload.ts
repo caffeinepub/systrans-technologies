@@ -1,5 +1,5 @@
 import { HttpAgent } from "@icp-sdk/core/agent";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { loadConfig } from "../config";
 import { StorageClient } from "../utils/StorageClient";
 
@@ -32,10 +32,13 @@ export function useFileUpload() {
     return hash;
   };
 
-  const getFileUrl = async (hash: string): Promise<string> => {
-    if (!storageClient) throw new Error("Storage not initialized");
-    return storageClient.getDirectURL(hash);
-  };
+  const getFileUrl = useCallback(
+    async (hash: string): Promise<string> => {
+      if (!storageClient) throw new Error("Storage not initialized");
+      return storageClient.getDirectURL(hash);
+    },
+    [storageClient],
+  );
 
   return { uploadFile, getFileUrl, ready: !!storageClient };
 }

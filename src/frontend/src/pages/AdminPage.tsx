@@ -19,6 +19,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -44,6 +51,8 @@ import {
 import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import type { backendInterface as FullBackendInterface } from "../backend.d";
+import { useActor } from "../hooks/useActor";
 import { useFileUpload } from "../hooks/useFileUpload";
 import {
   useAllContactSubmissions,
@@ -854,7 +863,23 @@ function JobApplicationsTab() {
   const [endDate, setEndDate] = useState("");
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
 
-  const stableGetFileUrl = useCallback(getFileUrl, []);
+  const downloadAsPdf = async (url: string, applicantName: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const pdfBlob = new Blob([blob], { type: "application/pdf" });
+      const objectUrl = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `${applicantName.replace(/\s+/g, "_")}_Resume.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch {
+      alert("Failed to download resume. Please try again.");
+    }
+  };
 
   useEffect(() => {
     if (!applications || !ready) return;
@@ -865,7 +890,7 @@ function JobApplicationsTab() {
       const results = await Promise.all(
         fileIds.map(async (id) => {
           try {
-            const url = await stableGetFileUrl(id);
+            const url = await getFileUrl(id);
             return [id, url] as [string, string];
           } catch {
             return null;
@@ -879,7 +904,7 @@ function JobApplicationsTab() {
       setFileUrls(urlMap);
     };
     fetchUrls();
-  }, [applications, ready, stableGetFileUrl]);
+  }, [applications, ready, getFileUrl]);
 
   const sendMailToApplicant = (app: {
     applicantName: string;
@@ -1043,20 +1068,38 @@ function JobApplicationsTab() {
                       </TableCell>
                       <TableCell>
                         {app.resumeFileId && fileUrls[app.resumeFileId] ? (
-                          <a
-                            href={fileUrls[app.resumeFileId]}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-xs text-accent hover:underline cursor-pointer"
                             data-ocid={`admin.applications.resume.button.${i + 1}`}
+                            onClick={() =>
+                              downloadAsPdf(
+                                fileUrls[app.resumeFileId],
+                                app.applicantName,
+                              )
+                            }
                           >
                             <Download className="w-3 h-3" />
                             Download
-                          </a>
+                          </button>
                         ) : app.resumeFileId ? (
-                          <span className="text-xs text-muted-foreground">
-                            Loading...
-                          </span>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-xs text-accent hover:underline cursor-pointer"
+                            onClick={async () => {
+                              try {
+                                const url = await getFileUrl(app.resumeFileId);
+                                await downloadAsPdf(url, app.applicantName);
+                              } catch (_e) {
+                                alert(
+                                  "Failed to load resume. Please try again.",
+                                );
+                              }
+                            }}
+                          >
+                            <Download className="w-3 h-3" />
+                            Download
+                          </button>
                         ) : (
                           <span className="text-xs text-muted-foreground">
                             None
@@ -1766,6 +1809,827 @@ function ChangePasswordTab() {
   );
 }
 
+function nsToString(ns: bigint | null | undefined): string {
+  if (ns === null || ns === undefined) return "-";
+  return new Date(Number(ns) / 1_000_000).toLocaleString("en-IN");
+}
+
+function EmployeesTab() {
+  const { actor: _empActor } = useActor();
+  const actor = _empActor as unknown as FullBackendInterface | null;
+  const [employees, setEmployees] = useState<import("../backend.d").Employee[]>(
+    [],
+  );
+  const [loading, setLoading] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [viewEmployee, setViewEmployee] = useState<
+    import("../backend.d").Employee | null
+  >(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const emptyForm = {
+    firstName: "",
+    lastName: "",
+    dob: "",
+    maritalStatus: "Single",
+    address: "",
+    pincode: "",
+    panNumber: "",
+    aadharNumber: "",
+    dateOfJoining: "",
+    role: "employee",
+    position: "",
+    salary: "",
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState<
+    Partial<import("../backend.d").Employee>
+  >({});
+
+  async function load() {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      setEmployees(await actor.getAllEmployees());
+    } catch {
+      /**/
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: load is stable within this component
+  useEffect(() => {
+    load();
+  }, [actor]);
+
+  async function handleCreate() {
+    if (!actor) return;
+    setSaving(true);
+    try {
+      await actor.createEmployee({
+        employeeId: "",
+        passwordHash: "",
+        firstName: form.firstName,
+        lastName: form.lastName,
+        dob: form.dob,
+        maritalStatus: form.maritalStatus,
+        address: form.address,
+        pincode: form.pincode,
+        panNumber: form.panNumber,
+        aadharNumber: form.aadharNumber,
+        dateOfJoining: form.dateOfJoining,
+        role: form.role,
+        position: form.position,
+        salary: form.salary,
+      });
+      toast.success("Employee created!");
+      setAddOpen(false);
+      setForm(emptyForm);
+      load();
+    } catch {
+      toast.error("Failed to create employee.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUpdate() {
+    if (!actor || !viewEmployee) return;
+    setSaving(true);
+    try {
+      await actor.updateEmployee(viewEmployee.employeeId, {
+        ...viewEmployee,
+        ...editForm,
+      });
+      toast.success("Employee updated!");
+      setIsEditing(false);
+      setViewEmployee(null);
+      load();
+    } catch {
+      toast.error("Failed to update employee.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!actor) return;
+    setDeleting(true);
+    try {
+      await actor.deleteEmployee(id);
+      toast.success("Employee deleted.");
+      setDeleteId(null);
+      load();
+    } catch {
+      toast.error("Failed to delete.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const ef = (field: string, val: string) =>
+    setEditForm((p) => ({ ...p, [field]: val }));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-foreground">Employee Database</h2>
+        <Button
+          size="sm"
+          className="btn-gradient text-white"
+          onClick={() => {
+            setForm(emptyForm);
+            setAddOpen(true);
+          }}
+          data-ocid="admin.employees.add_button"
+        >
+          <Plus className="h-4 w-4 mr-1" /> Add Employee
+        </Button>
+      </div>
+      {loading ? (
+        <div
+          className="flex items-center gap-2 text-muted-foreground"
+          data-ocid="admin.employees.loading_state"
+        >
+          <Loader2 className="h-5 w-5 animate-spin" /> Loading...
+        </div>
+      ) : employees.length === 0 ? (
+        <p
+          className="text-muted-foreground text-sm"
+          data-ocid="admin.employees.empty_state"
+        >
+          No employees yet.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee ID</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Position</TableHead>
+                <TableHead>Salary</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {employees.map((e, i) => (
+                <TableRow
+                  key={e.employeeId}
+                  data-ocid={`admin.employees.item.${i + 1}`}
+                >
+                  <TableCell className="font-mono text-sm">
+                    {e.employeeId}
+                  </TableCell>
+                  <TableCell>
+                    {e.firstName} {e.lastName}
+                  </TableCell>
+                  <TableCell className="capitalize">{e.role}</TableCell>
+                  <TableCell>{e.position}</TableCell>
+                  <TableCell>{e.salary ? `₹${e.salary}` : "-"}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setViewEmployee(e);
+                          setEditForm({ ...e });
+                          setIsEditing(false);
+                        }}
+                        data-ocid={`admin.employees.edit_button.${i + 1}`}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" /> View
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setDeleteId(e.employeeId)}
+                        data-ocid={`admin.employees.delete_button.${i + 1}`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent
+          className="max-w-2xl max-h-[85vh] overflow-y-auto"
+          data-ocid="admin.employees.modal"
+        >
+          <DialogHeader>
+            <DialogTitle>Add New Employee</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            {(
+              [
+                ["First Name", "firstName"],
+                ["Last Name", "lastName"],
+                ["Date of Birth", "dob", "date"],
+                ["Date of Joining", "dateOfJoining", "date"],
+                ["Pincode", "pincode"],
+                ["PAN Number", "panNumber"],
+                ["Aadhar Number", "aadharNumber"],
+                ["Position", "position"],
+                ["Salary", "salary"],
+              ] as [string, string, string?][]
+            ).map(([label, key, type]) => (
+              <div key={key}>
+                <Label className="mb-1 block text-sm">{label}</Label>
+                <Input
+                  type={type || "text"}
+                  value={(form as any)[key] || ""}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, [key]: e.target.value }))
+                  }
+                />
+              </div>
+            ))}
+            <div className="col-span-2">
+              <Label className="mb-1 block text-sm">Address</Label>
+              <Input
+                value={form.address}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, address: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <Label className="mb-1 block text-sm">Marital Status</Label>
+              <Select
+                value={form.maritalStatus}
+                onValueChange={(v) =>
+                  setForm((p) => ({ ...p, maritalStatus: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Single">Single</SelectItem>
+                  <SelectItem value="Married">Married</SelectItem>
+                  <SelectItem value="Divorced">Divorced</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="mb-1 block text-sm">Role</Label>
+              <Select
+                value={form.role}
+                onValueChange={(v) => setForm((p) => ({ ...p, role: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="support">Support</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAddOpen(false)}
+              data-ocid="admin.employees.add_cancel.button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={saving}
+              className="btn-gradient text-white"
+              data-ocid="admin.employees.add_save.button"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
+              {saving ? "Saving..." : "Create Employee"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!viewEmployee}
+        onOpenChange={(o) => {
+          if (!o) {
+            setViewEmployee(null);
+            setIsEditing(false);
+          }
+        }}
+      >
+        <DialogContent
+          className="max-w-2xl max-h-[85vh] overflow-y-auto"
+          data-ocid="admin.employees.view.modal"
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {isEditing ? "Edit Employee" : "Employee Details"} —{" "}
+              {viewEmployee?.employeeId}
+            </DialogTitle>
+          </DialogHeader>
+          {viewEmployee && (
+            <div className="space-y-4">
+              {isEditing ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {(
+                    [
+                      ["First Name", "firstName"],
+                      ["Last Name", "lastName"],
+                      ["Date of Birth", "dob", "date"],
+                      ["Date of Joining", "dateOfJoining", "date"],
+                      ["Pincode", "pincode"],
+                      ["PAN Number", "panNumber"],
+                      ["Aadhar Number", "aadharNumber"],
+                      ["Position", "position"],
+                      ["Salary", "salary"],
+                      ["Password", "passwordHash"],
+                    ] as [string, string, string?][]
+                  ).map(([label, key, type]) => (
+                    <div key={key}>
+                      <Label className="mb-1 block text-sm">{label}</Label>
+                      <Input
+                        type={type || "text"}
+                        value={(editForm as any)[key] || ""}
+                        onChange={(e) => ef(key, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                  <div className="col-span-2">
+                    <Label className="mb-1 block text-sm">Address</Label>
+                    <Input
+                      value={(editForm as any).address || ""}
+                      onChange={(e) => ef("address", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-sm">Marital Status</Label>
+                    <Select
+                      value={(editForm as any).maritalStatus || "Single"}
+                      onValueChange={(v) => ef("maritalStatus", v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Single">Single</SelectItem>
+                        <SelectItem value="Married">Married</SelectItem>
+                        <SelectItem value="Divorced">Divorced</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-sm">Role</Label>
+                    <Select
+                      value={(editForm as any).role || "employee"}
+                      onValueChange={(v) => ef("role", v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="employee">Employee</SelectItem>
+                        <SelectItem value="support">Support</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {(
+                    [
+                      ["Employee ID", viewEmployee.employeeId],
+                      ["First Name", viewEmployee.firstName],
+                      ["Last Name", viewEmployee.lastName],
+                      ["Date of Birth", viewEmployee.dob],
+                      ["Marital Status", viewEmployee.maritalStatus],
+                      ["Address", viewEmployee.address],
+                      ["Pincode", viewEmployee.pincode],
+                      ["PAN Number", viewEmployee.panNumber],
+                      ["Aadhar Number", viewEmployee.aadharNumber],
+                      ["Date of Joining", viewEmployee.dateOfJoining],
+                      ["Role", viewEmployee.role],
+                      ["Position", viewEmployee.position],
+                      [
+                        "Salary",
+                        viewEmployee.salary ? `₹${viewEmployee.salary}` : "-",
+                      ],
+                    ] as [string, string][]
+                  ).map(([label, value]) => (
+                    <div key={label}>
+                      <span className="text-muted-foreground">{label}:</span>
+                      <span className="ml-1 font-medium">{value || "-"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {isEditing ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEditing(false)}
+                  data-ocid="admin.employees.edit_cancel.button"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleUpdate}
+                  disabled={saving}
+                  className="btn-gradient text-white"
+                  data-ocid="admin.employees.save_button"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Save
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setViewEmployee(null)}
+                  data-ocid="admin.employees.close_button"
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => setIsEditing(true)}
+                  className="btn-gradient text-white"
+                  data-ocid="admin.employees.edit.button"
+                >
+                  <Pencil className="h-4 w-4 mr-2" /> Edit
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!deleteId}
+        onOpenChange={(o) => {
+          if (!o) setDeleteId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Employee</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the employee record and cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-ocid="admin.employees.delete_cancel.button">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteId && handleDelete(deleteId)}
+              disabled={deleting}
+              data-ocid="admin.employees.delete_confirm.button"
+            >
+              {deleting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}{" "}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function TimesheetsTab() {
+  const { actor: _tsActor } = useActor();
+  const actor = _tsActor as unknown as FullBackendInterface | null;
+  const [employees, setEmployees] = useState<import("../backend.d").Employee[]>(
+    [],
+  );
+  const [timesheets, setTimesheets] = useState<
+    import("../backend.d").TimesheetEntry[]
+  >([]);
+  const [selectedEmp, setSelectedEmp] = useState<string>("all");
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(
+    String(now.getMonth() + 1).padStart(2, "0"),
+  );
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
+
+  useEffect(() => {
+    if (!actor) return;
+    Promise.all([actor.getAllEmployees(), actor.getAllTimesheets()])
+      .then(([emps, sheets]) => {
+        setEmployees(emps);
+        setTimesheets(sheets);
+      })
+      .catch(() => {});
+  }, [actor]);
+
+  const filtered = timesheets.filter((t) => {
+    const matchEmp = selectedEmp === "all" || t.employeeId === selectedEmp;
+    const matchMonth = t.date.startsWith(`${selectedYear}-${selectedMonth}`);
+    return matchEmp && matchMonth;
+  });
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold text-foreground">Timesheets</h2>
+      <div className="flex flex-wrap gap-3">
+        <div>
+          <Label className="text-xs mb-1 block">Employee</Label>
+          <Select value={selectedEmp} onValueChange={setSelectedEmp}>
+            <SelectTrigger
+              className="w-52"
+              data-ocid="admin.timesheets.employee.select"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Employees</SelectItem>
+              {employees.map((e) => (
+                <SelectItem key={e.employeeId} value={e.employeeId}>
+                  {e.employeeId} — {e.firstName} {e.lastName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs mb-1 block">Month</Label>
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger
+              className="w-36"
+              data-ocid="admin.timesheets.month.select"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 12 }, (_, i) => {
+                const m = String(i + 1).padStart(2, "0");
+                const label = new Date(2000, i).toLocaleString("en-IN", {
+                  month: "long",
+                });
+                return (
+                  <SelectItem key={m} value={m}>
+                    {label}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs mb-1 block">Year</Label>
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger
+              className="w-28"
+              data-ocid="admin.timesheets.year.select"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {["2024", "2025", "2026", "2027"].map((y) => (
+                <SelectItem key={y} value={y}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      {filtered.length === 0 ? (
+        <p
+          className="text-muted-foreground text-sm"
+          data-ocid="admin.timesheets.empty_state"
+        >
+          No timesheet entries for the selected filters.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee ID</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Check-In</TableHead>
+                <TableHead>Check-Out</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((t, i) => (
+                <TableRow
+                  key={t.id}
+                  data-ocid={`admin.timesheets.item.${i + 1}`}
+                >
+                  <TableCell className="font-mono text-sm">
+                    {t.employeeId}
+                  </TableCell>
+                  <TableCell>{t.date}</TableCell>
+                  <TableCell>{nsToString(t.checkInTime)}</TableCell>
+                  <TableCell>{nsToString(t.checkOutTime)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminTicketsTab() {
+  const { actor: _tkActor } = useActor();
+  const actor = _tkActor as unknown as FullBackendInterface | null;
+  const [tickets, setTickets] = useState<import("../backend.d").Ticket[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [rowStatus, setRowStatus] = useState<Record<string, string>>({});
+  const [rowNotes, setRowNotes] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+
+  async function load() {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      const all = await actor.getAllTickets();
+      setTickets(all);
+      const sMap: Record<string, string> = {};
+      const nMap: Record<string, string> = {};
+      for (const t of all) {
+        sMap[t.ticketNumber] = t.status;
+        nMap[t.ticketNumber] = t.notes || "";
+      }
+      setRowStatus(sMap);
+      setRowNotes(nMap);
+    } catch {
+      /**/
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: load is stable within this component
+  useEffect(() => {
+    load();
+  }, [actor]);
+
+  async function handleSave(ticketNumber: string) {
+    if (!actor) return;
+    setSaving((p) => ({ ...p, [ticketNumber]: true }));
+    try {
+      await actor.updateTicketStatus(
+        ticketNumber,
+        rowStatus[ticketNumber],
+        rowNotes[ticketNumber] || "",
+      );
+      toast.success("Ticket updated!");
+      load();
+    } catch {
+      toast.error("Failed to update ticket.");
+    } finally {
+      setSaving((p) => ({ ...p, [ticketNumber]: false }));
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-foreground">Support Tickets</h2>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={load}
+          disabled={loading}
+          data-ocid="admin.tickets.refresh"
+        >
+          {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}{" "}
+          Refresh
+        </Button>
+      </div>
+      {loading ? (
+        <div
+          className="flex items-center gap-2 text-muted-foreground"
+          data-ocid="admin.tickets.loading_state"
+        >
+          <Loader2 className="h-5 w-5 animate-spin" /> Loading...
+        </div>
+      ) : tickets.length === 0 ? (
+        <p
+          className="text-muted-foreground text-sm"
+          data-ocid="admin.tickets.empty_state"
+        >
+          No tickets yet.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Ticket #</TableHead>
+                <TableHead>Raised By</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Notes</TableHead>
+                <TableHead>Save</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tickets.map((t, i) => (
+                <TableRow
+                  key={t.ticketNumber}
+                  data-ocid={`admin.tickets.item.${i + 1}`}
+                >
+                  <TableCell className="font-mono text-sm">
+                    {t.ticketNumber}
+                  </TableCell>
+                  <TableCell>{t.raisedBy}</TableCell>
+                  <TableCell>{t.category}</TableCell>
+                  <TableCell className="max-w-xs truncate text-sm">
+                    {t.description}
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={rowStatus[t.ticketNumber] || t.status}
+                      onValueChange={(v) =>
+                        setRowStatus((p) => ({ ...p, [t.ticketNumber]: v }))
+                      }
+                    >
+                      <SelectTrigger
+                        className="w-36"
+                        data-ocid={`admin.tickets.status.${i + 1}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Open</SelectItem>
+                        <SelectItem value="in-progress">In Progress</SelectItem>
+                        <SelectItem value="resolved">Resolved</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {nsToString(t.createdAt)}
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className="w-40 text-sm"
+                      value={rowNotes[t.ticketNumber] ?? ""}
+                      onChange={(e) =>
+                        setRowNotes((p) => ({
+                          ...p,
+                          [t.ticketNumber]: e.target.value,
+                        }))
+                      }
+                      placeholder="Notes..."
+                      data-ocid={`admin.tickets.notes.${i + 1}`}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      className="btn-gradient text-white"
+                      onClick={() => handleSave(t.ticketNumber)}
+                      disabled={saving[t.ticketNumber]}
+                      data-ocid={`admin.tickets.save_button.${i + 1}`}
+                    >
+                      {saving[t.ticketNumber] ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Save className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const [loggedIn, setLoggedIn] = useState(
     () => localStorage.getItem("admin_logged_in") === "true",
@@ -1943,6 +2807,27 @@ export default function AdminPage() {
             >
               Change Password
             </TabsTrigger>
+            <TabsTrigger
+              value="employees"
+              className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent"
+              data-ocid="admin.employees.tab"
+            >
+              Employees
+            </TabsTrigger>
+            <TabsTrigger
+              value="timesheets"
+              className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent"
+              data-ocid="admin.timesheets.tab"
+            >
+              Timesheets
+            </TabsTrigger>
+            <TabsTrigger
+              value="tickets"
+              className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent"
+              data-ocid="admin.tickets.tab"
+            >
+              Tickets
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="jobs">
@@ -1965,6 +2850,15 @@ export default function AdminPage() {
           </TabsContent>
           <TabsContent value="change-password">
             <ChangePasswordTab />
+          </TabsContent>
+          <TabsContent value="employees">
+            <EmployeesTab />
+          </TabsContent>
+          <TabsContent value="timesheets">
+            <TimesheetsTab />
+          </TabsContent>
+          <TabsContent value="tickets">
+            <AdminTicketsTab />
           </TabsContent>
         </Tabs>
       </main>

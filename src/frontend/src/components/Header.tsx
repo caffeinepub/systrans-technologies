@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 
@@ -17,6 +17,7 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const routerState = useRouterState();
   const pathname = routerState.location.pathname;
+  const navigate = useNavigate();
 
   const isActive = (link: (typeof navLinks)[0]) => {
     if (link.href === "/" && !link.anchor) return pathname === "/";
@@ -26,10 +27,20 @@ export default function Header() {
 
   const handleAnchorClick = (anchor: string) => {
     setMobileOpen(false);
-    if (anchor && pathname === "/") {
+    if (!anchor) return;
+    if (pathname === "/") {
       setTimeout(() => {
         document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth" });
       }, 50);
+    } else {
+      // Navigate to home first, then scroll after page loads
+      navigate({ to: "/" }).then(() => {
+        setTimeout(() => {
+          document
+            .getElementById(anchor)
+            ?.scrollIntoView({ behavior: "smooth" });
+        }, 200);
+      });
     }
   };
 

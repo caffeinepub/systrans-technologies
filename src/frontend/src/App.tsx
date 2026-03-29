@@ -8,7 +8,9 @@ import {
 } from "@tanstack/react-router";
 import AdminPage from "./pages/AdminPage";
 import CareersPage from "./pages/CareersPage";
+import EmployeePortalPage from "./pages/EmployeePortalPage";
 import HomePage from "./pages/HomePage";
+import SupportPortalPage from "./pages/SupportPortalPage";
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -37,7 +39,25 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
-const routeTree = rootRoute.addChildren([homeRoute, careersRoute, adminRoute]);
+const employeeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/employee",
+  component: EmployeePortalPage,
+});
+
+const supportRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/support",
+  component: SupportPortalPage,
+});
+
+const routeTree = rootRoute.addChildren([
+  homeRoute,
+  careersRoute,
+  adminRoute,
+  employeeRoute,
+  supportRoute,
+]);
 
 const router = createRouter({ routeTree });
 

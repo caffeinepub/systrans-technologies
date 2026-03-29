@@ -27,8 +27,9 @@ import {
   RefreshCw,
   Ticket,
   Timer,
+  User,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type {
   Employee,
@@ -37,8 +38,14 @@ import type {
   TimesheetEntry,
 } from "../backend.d";
 import { useActor } from "../hooks/useActor";
+import { useFileUpload } from "../hooks/useFileUpload";
 
-type Section = "timesheet" | "change-password" | "raise-ticket" | "my-tickets";
+type Section =
+  | "timesheet"
+  | "change-password"
+  | "raise-ticket"
+  | "my-tickets"
+  | "profile";
 
 function nsToString(ns: bigint | null | undefined): string {
   if (!ns && ns !== BigInt(0)) return "-";
@@ -54,6 +61,7 @@ function statusColor(status: string): string {
 export default function EmployeePortalPage() {
   const { actor: _actor } = useActor();
   const actor = _actor as unknown as FullBackendInterface | null;
+  const { uploadFile, getFileUrl, ready: storageReady } = useFileUpload();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loginId, setLoginId] = useState("");
   const [loginPass, setLoginPass] = useState("");
@@ -80,6 +88,11 @@ export default function EmployeePortalPage() {
   const [myTickets, setMyTickets] = useState<TicketType[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
 
+  // Profile photo state
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
   const today = new Date().toISOString().split("T")[0];
 
   async function handleLogin() {
@@ -92,6 +105,11 @@ export default function EmployeePortalPage() {
         setEmployee(result);
         loadTodayEntry(result.employeeId);
         loadMyTickets(result.employeeId);
+        if (result.profilePhotoFileId) {
+          getFileUrl(result.profilePhotoFileId)
+            .then(setPhotoUrl)
+            .catch(() => {});
+        }
       } else {
         setLoginError("Invalid credentials. Please try again.");
       }
@@ -212,6 +230,25 @@ export default function EmployeePortalPage() {
     }
   }
 
+  async function handlePhotoUpload(file: File) {
+    if (!actor || !employee || !storageReady) return;
+    setPhotoUploading(true);
+    try {
+      const fileId = await uploadFile(file);
+      await actor.updateEmployeeProfilePhoto(employee.employeeId, fileId);
+      const url = await getFileUrl(fileId);
+      setPhotoUrl(url);
+      // Refresh employee data
+      const updated = await actor.getEmployee(employee.employeeId);
+      if (updated) setEmployee(updated);
+      toast.success("Profile photo updated!");
+    } catch {
+      toast.error("Failed to upload photo.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
   // Login screen
   if (!employee) {
     return (
@@ -308,6 +345,7 @@ export default function EmployeePortalPage() {
               setEmployee(null);
               setLoginId("");
               setLoginPass("");
+              setPhotoUrl(null);
             }}
             data-ocid="employee.logout.button"
           >
@@ -330,6 +368,7 @@ export default function EmployeePortalPage() {
                   label: "Change Password",
                   icon: KeyRound,
                 },
+                { id: "profile", label: "Profile", icon: User },
               ] as const
             ).map(({ id, label, icon: Icon }) => (
               <button
@@ -629,6 +668,94 @@ export default function EmployeePortalPage() {
                   </Table>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Profile */}
+          {section === "profile" && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h2
+                className="text-xl font-bold mb-6"
+                style={{ color: "#000080" }}
+              >
+                My Profile
+              </h2>
+
+              {/* Profile Photo */}
+              <div className="flex flex-col items-center mb-8">
+                <div
+                  className="relative w-20 h-20 rounded-full overflow-hidden border-4 mb-3"
+                  style={{ borderColor: "#000080" }}
+                >
+                  {photoUrl ? (
+                    <img
+                      src={photoUrl}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="w-full h-full flex items-center justify-center text-white text-2xl font-bold"
+                      style={{ backgroundColor: "#000080" }}
+                    >
+                      {employee.firstName?.[0]}
+                      {employee.lastName?.[0]}
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handlePhotoUpload(file);
+                  }}
+                  data-ocid="employee.profile.upload_button"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading || !storageReady}
+                  style={{ borderColor: "#000080", color: "#000080" }}
+                  data-ocid="employee.profile.photo_button"
+                >
+                  {photoUploading ? (
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  ) : null}
+                  {photoUploading ? "Uploading..." : "Upload Photo"}
+                </Button>
+              </div>
+
+              {/* Profile Details (read-only) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {(
+                  [
+                    ["First Name", employee.firstName],
+                    ["Last Name", employee.lastName],
+                    ["Email", employee.email],
+                    ["Mobile", employee.mobile],
+                    ["Date of Birth", employee.dob],
+                    ["Date of Joining", employee.dateOfJoining],
+                    ["Position", employee.position],
+                    ["Address", employee.address],
+                    ["City", employee.city],
+                    ["State", employee.state],
+                    ["Pincode", employee.pincode],
+                  ] as [string, string][]
+                ).map(([label, value]) => (
+                  <div key={label}>
+                    <Label className="text-xs text-gray-500 mb-0.5 block">
+                      {label}
+                    </Label>
+                    <p className="text-sm font-medium text-gray-800 bg-gray-50 rounded px-3 py-2">
+                      {value || "-"}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </main>

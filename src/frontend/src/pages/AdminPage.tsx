@@ -39,6 +39,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Download,
+  Eye,
   KeyRound,
   Loader2,
   Lock,
@@ -1850,14 +1851,20 @@ function EmployeesTab() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pincodeLoading, setPincodeLoading] = useState(false);
+  const [editPincodeLoading, setEditPincodeLoading] = useState(false);
 
   const emptyForm = {
     firstName: "",
     lastName: "",
+    email: "",
+    mobile: "",
     dob: "",
     maritalStatus: "Single",
     address: "",
     pincode: "",
+    city: "",
+    state: "",
     panNumber: "",
     aadharNumber: "",
     dateOfJoining: "",
@@ -1869,6 +1876,31 @@ function EmployeesTab() {
   const [editForm, setEditForm] = useState<
     Partial<import("../backend.d").Employee>
   >({});
+
+  async function fetchCityState(pincode: string, isEdit = false) {
+    if (pincode.length !== 6) return;
+    if (isEdit) setEditPincodeLoading(true);
+    else setPincodeLoading(true);
+    try {
+      const res = await fetch(
+        `https://api.postalpincode.in/pincode/${pincode}`,
+      );
+      const data = await res.json();
+      if (data?.[0]?.Status === "Success" && data[0].PostOffice?.length > 0) {
+        const po = data[0].PostOffice[0];
+        if (isEdit) {
+          setEditForm((p) => ({ ...p, city: po.District, state: po.State }));
+        } else {
+          setForm((p) => ({ ...p, city: po.District, state: po.State }));
+        }
+      }
+    } catch {
+      // leave fields editable
+    } finally {
+      if (isEdit) setEditPincodeLoading(false);
+      else setPincodeLoading(false);
+    }
+  }
 
   async function load() {
     if (!actor) return;
@@ -1896,16 +1928,21 @@ function EmployeesTab() {
         passwordHash: "",
         firstName: form.firstName,
         lastName: form.lastName,
+        email: form.email,
+        mobile: form.mobile,
         dob: form.dob,
         maritalStatus: form.maritalStatus,
         address: form.address,
         pincode: form.pincode,
+        city: form.city,
+        state: form.state,
         panNumber: form.panNumber,
         aadharNumber: form.aadharNumber,
         dateOfJoining: form.dateOfJoining,
         role: form.role,
         position: form.position,
         salary: form.salary,
+        profilePhotoFileId: "",
       });
       toast.success("Employee created!");
       setAddOpen(false);
@@ -1992,9 +2029,10 @@ function EmployeesTab() {
               <TableRow>
                 <TableHead>Employee ID</TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Mobile</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Position</TableHead>
-                <TableHead>Salary</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -2010,9 +2048,10 @@ function EmployeesTab() {
                   <TableCell>
                     {e.firstName} {e.lastName}
                   </TableCell>
+                  <TableCell className="text-sm">{e.email || "-"}</TableCell>
+                  <TableCell className="text-sm">{e.mobile || "-"}</TableCell>
                   <TableCell className="capitalize">{e.role}</TableCell>
                   <TableCell>{e.position}</TableCell>
-                  <TableCell>{e.salary ? `₹${e.salary}` : "-"}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">
                       <Button
@@ -2044,6 +2083,7 @@ function EmployeesTab() {
         </div>
       )}
 
+      {/* Add Employee Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent
           className="max-w-2xl max-h-[85vh] overflow-y-auto"
@@ -2057,9 +2097,10 @@ function EmployeesTab() {
               [
                 ["First Name", "firstName"],
                 ["Last Name", "lastName"],
+                ["Email", "email"],
+                ["Mobile", "mobile"],
                 ["Date of Birth", "dob", "date"],
                 ["Date of Joining", "dateOfJoining", "date"],
-                ["Pincode", "pincode"],
                 ["PAN Number", "panNumber"],
                 ["Aadhar Number", "aadharNumber"],
                 ["Position", "position"],
@@ -2077,6 +2118,55 @@ function EmployeesTab() {
                 />
               </div>
             ))}
+            <div>
+              <Label className="mb-1 block text-sm">Pincode</Label>
+              <Input
+                value={form.pincode}
+                maxLength={6}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, "");
+                  setForm((p) => ({ ...p, pincode: v }));
+                  if (v.length === 6) fetchCityState(v);
+                }}
+                data-ocid="admin.employees.pincode.input"
+              />
+            </div>
+            <div>
+              <Label className="mb-1 block text-sm">
+                City{" "}
+                {pincodeLoading && (
+                  <span className="text-xs text-blue-500 ml-1">
+                    Fetching...
+                  </span>
+                )}
+              </Label>
+              <Input
+                value={form.city}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, city: e.target.value }))
+                }
+                placeholder="Auto-filled from pincode"
+                data-ocid="admin.employees.city.input"
+              />
+            </div>
+            <div>
+              <Label className="mb-1 block text-sm">
+                State{" "}
+                {pincodeLoading && (
+                  <span className="text-xs text-blue-500 ml-1">
+                    Fetching...
+                  </span>
+                )}
+              </Label>
+              <Input
+                value={form.state}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, state: e.target.value }))
+                }
+                placeholder="Auto-filled from pincode"
+                data-ocid="admin.employees.state.input"
+              />
+            </div>
             <div className="col-span-2">
               <Label className="mb-1 block text-sm">Address</Label>
               <Input
@@ -2143,6 +2233,7 @@ function EmployeesTab() {
         </DialogContent>
       </Dialog>
 
+      {/* View/Edit Employee Dialog */}
       <Dialog
         open={!!viewEmployee}
         onOpenChange={(o) => {
@@ -2170,9 +2261,10 @@ function EmployeesTab() {
                     [
                       ["First Name", "firstName"],
                       ["Last Name", "lastName"],
+                      ["Email", "email"],
+                      ["Mobile", "mobile"],
                       ["Date of Birth", "dob", "date"],
                       ["Date of Joining", "dateOfJoining", "date"],
-                      ["Pincode", "pincode"],
                       ["PAN Number", "panNumber"],
                       ["Aadhar Number", "aadharNumber"],
                       ["Position", "position"],
@@ -2189,6 +2281,48 @@ function EmployeesTab() {
                       />
                     </div>
                   ))}
+                  <div>
+                    <Label className="mb-1 block text-sm">Pincode</Label>
+                    <Input
+                      value={(editForm as any).pincode || ""}
+                      maxLength={6}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\D/g, "");
+                        ef("pincode", v);
+                        if (v.length === 6) fetchCityState(v, true);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-sm">
+                      City{" "}
+                      {editPincodeLoading && (
+                        <span className="text-xs text-blue-500 ml-1">
+                          Fetching...
+                        </span>
+                      )}
+                    </Label>
+                    <Input
+                      value={(editForm as any).city || ""}
+                      onChange={(e) => ef("city", e.target.value)}
+                      placeholder="Auto-filled from pincode"
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-sm">
+                      State{" "}
+                      {editPincodeLoading && (
+                        <span className="text-xs text-blue-500 ml-1">
+                          Fetching...
+                        </span>
+                      )}
+                    </Label>
+                    <Input
+                      value={(editForm as any).state || ""}
+                      onChange={(e) => ef("state", e.target.value)}
+                      placeholder="Auto-filled from pincode"
+                    />
+                  </div>
                   <div className="col-span-2">
                     <Label className="mb-1 block text-sm">Address</Label>
                     <Input
@@ -2235,10 +2369,14 @@ function EmployeesTab() {
                       ["Employee ID", viewEmployee.employeeId],
                       ["First Name", viewEmployee.firstName],
                       ["Last Name", viewEmployee.lastName],
+                      ["Email", viewEmployee.email],
+                      ["Mobile", viewEmployee.mobile],
                       ["Date of Birth", viewEmployee.dob],
                       ["Marital Status", viewEmployee.maritalStatus],
                       ["Address", viewEmployee.address],
                       ["Pincode", viewEmployee.pincode],
+                      ["City", viewEmployee.city],
+                      ["State", viewEmployee.state],
                       ["PAN Number", viewEmployee.panNumber],
                       ["Aadhar Number", viewEmployee.aadharNumber],
                       ["Date of Joining", viewEmployee.dateOfJoining],
@@ -2246,7 +2384,9 @@ function EmployeesTab() {
                       ["Position", viewEmployee.position],
                       [
                         "Salary",
-                        viewEmployee.salary ? `₹${viewEmployee.salary}` : "-",
+                        viewEmployee.salary
+                          ? `\u20b9${viewEmployee.salary}`
+                          : "-",
                       ],
                     ] as [string, string][]
                   ).map(([label, value]) => (
@@ -2338,6 +2478,16 @@ function EmployeesTab() {
       </AlertDialog>
     </div>
   );
+}
+
+function calcHours(checkIn?: bigint, checkOut?: bigint): string {
+  if (!checkIn || !checkOut) return "-";
+  const diffMs = (Number(checkOut) - Number(checkIn)) / 1_000_000;
+  if (diffMs <= 0) return "-";
+  const totalMins = Math.floor(diffMs / 60000);
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return `${h}h ${m}m`;
 }
 
 function TimesheetsTab() {
@@ -2454,6 +2604,7 @@ function TimesheetsTab() {
                 <TableHead>Date</TableHead>
                 <TableHead>Check-In</TableHead>
                 <TableHead>Check-Out</TableHead>
+                <TableHead>Total Hours</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2468,6 +2619,12 @@ function TimesheetsTab() {
                   <TableCell>{t.date}</TableCell>
                   <TableCell>{nsToString(t.checkInTime)}</TableCell>
                   <TableCell>{nsToString(t.checkOutTime)}</TableCell>
+                  <TableCell className="font-medium text-sm">
+                    {calcHours(
+                      t.checkInTime ?? undefined,
+                      t.checkOutTime ?? undefined,
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -2483,9 +2640,11 @@ function AdminTicketsTab() {
   const actor = _tkActor as unknown as FullBackendInterface | null;
   const [tickets, setTickets] = useState<import("../backend.d").Ticket[]>([]);
   const [loading, setLoading] = useState(false);
-  const [rowStatus, setRowStatus] = useState<Record<string, string>>({});
-  const [rowNotes, setRowNotes] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [viewTicket, setViewTicket] = useState<
+    import("../backend.d").Ticket | null
+  >(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   async function load() {
     if (!actor) return;
@@ -2493,14 +2652,6 @@ function AdminTicketsTab() {
     try {
       const all = await actor.getAllTickets();
       setTickets(all);
-      const sMap: Record<string, string> = {};
-      const nMap: Record<string, string> = {};
-      for (const t of all) {
-        sMap[t.ticketNumber] = t.status;
-        nMap[t.ticketNumber] = t.notes || "";
-      }
-      setRowStatus(sMap);
-      setRowNotes(nMap);
     } catch {
       /**/
     } finally {
@@ -2513,22 +2664,46 @@ function AdminTicketsTab() {
     load();
   }, [actor]);
 
-  async function handleSave(ticketNumber: string) {
-    if (!actor) return;
-    setSaving((p) => ({ ...p, [ticketNumber]: true }));
-    try {
-      await actor.updateTicketStatus(
-        ticketNumber,
-        rowStatus[ticketNumber],
-        rowNotes[ticketNumber] || "",
-      );
-      toast.success("Ticket updated!");
-      load();
-    } catch {
-      toast.error("Failed to update ticket.");
-    } finally {
-      setSaving((p) => ({ ...p, [ticketNumber]: false }));
-    }
+  const filteredTickets = tickets.filter((t) => {
+    if (!startDate && !endDate) return true;
+    const created = new Date(Number(t.createdAt) / 1_000_000);
+    if (startDate && created < new Date(startDate)) return false;
+    if (endDate && created > new Date(`${endDate}T23:59:59`)) return false;
+    return true;
+  });
+
+  function handleExport() {
+    const headers = [
+      "Ticket #",
+      "Raised By",
+      "Category",
+      "Description",
+      "Status",
+      "Created",
+      "Resolved At",
+      "Notes",
+    ];
+    const rows = filteredTickets.map((t) => [
+      t.ticketNumber,
+      t.raisedBy,
+      t.category,
+      t.description,
+      t.status,
+      nsToString(t.createdAt),
+      t.resolvedAt ? nsToString(t.resolvedAt) : "-",
+      t.notes || "",
+    ]);
+    exportCSV(
+      headers,
+      rows,
+      `tickets_${startDate || "all"}_${endDate || "all"}.csv`,
+    );
+  }
+
+  function statusColor(status: string): string {
+    if (status === "resolved") return "bg-green-100 text-green-800";
+    if (status === "in-progress") return "bg-yellow-100 text-yellow-800";
+    return "bg-red-100 text-red-800";
   }
 
   return (
@@ -2546,6 +2721,39 @@ function AdminTicketsTab() {
           Refresh
         </Button>
       </div>
+
+      <div className="flex flex-wrap items-end gap-3 p-3 bg-gray-50 rounded-lg border">
+        <div>
+          <Label className="text-xs mb-1 block">From Date</Label>
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-40 text-sm"
+            data-ocid="admin.tickets.start_date.input"
+          />
+        </div>
+        <div>
+          <Label className="text-xs mb-1 block">To Date</Label>
+          <Input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-40 text-sm"
+            data-ocid="admin.tickets.end_date.input"
+          />
+        </div>
+        <Button
+          size="sm"
+          onClick={handleExport}
+          disabled={filteredTickets.length === 0}
+          className="btn-gradient text-white"
+          data-ocid="admin.tickets.export.button"
+        >
+          <Download className="h-4 w-4 mr-1" /> Export CSV
+        </Button>
+      </div>
+
       {loading ? (
         <div
           className="flex items-center gap-2 text-muted-foreground"
@@ -2553,12 +2761,12 @@ function AdminTicketsTab() {
         >
           <Loader2 className="h-5 w-5 animate-spin" /> Loading...
         </div>
-      ) : tickets.length === 0 ? (
+      ) : filteredTickets.length === 0 ? (
         <p
           className="text-muted-foreground text-sm"
           data-ocid="admin.tickets.empty_state"
         >
-          No tickets yet.
+          No tickets found.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -2571,12 +2779,11 @@ function AdminTicketsTab() {
                 <TableHead>Description</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead>Save</TableHead>
+                <TableHead>View</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tickets.map((t, i) => (
+              {filteredTickets.map((t, i) => (
                 <TableRow
                   key={t.ticketNumber}
                   data-ocid={`admin.tickets.item.${i + 1}`}
@@ -2590,55 +2797,23 @@ function AdminTicketsTab() {
                     {t.description}
                   </TableCell>
                   <TableCell>
-                    <Select
-                      value={rowStatus[t.ticketNumber] || t.status}
-                      onValueChange={(v) =>
-                        setRowStatus((p) => ({ ...p, [t.ticketNumber]: v }))
-                      }
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusColor(t.status)}`}
                     >
-                      <SelectTrigger
-                        className="w-36"
-                        data-ocid={`admin.tickets.status.${i + 1}`}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="in-progress">In Progress</SelectItem>
-                        <SelectItem value="resolved">Resolved</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      {t.status}
+                    </span>
                   </TableCell>
                   <TableCell className="text-sm">
                     {nsToString(t.createdAt)}
                   </TableCell>
                   <TableCell>
-                    <Input
-                      className="w-40 text-sm"
-                      value={rowNotes[t.ticketNumber] ?? ""}
-                      onChange={(e) =>
-                        setRowNotes((p) => ({
-                          ...p,
-                          [t.ticketNumber]: e.target.value,
-                        }))
-                      }
-                      placeholder="Notes..."
-                      data-ocid={`admin.tickets.notes.${i + 1}`}
-                    />
-                  </TableCell>
-                  <TableCell>
                     <Button
                       size="sm"
-                      className="btn-gradient text-white"
-                      onClick={() => handleSave(t.ticketNumber)}
-                      disabled={saving[t.ticketNumber]}
-                      data-ocid={`admin.tickets.save_button.${i + 1}`}
+                      variant="outline"
+                      onClick={() => setViewTicket(t)}
+                      data-ocid={`admin.tickets.view.button.${i + 1}`}
                     >
-                      {saving[t.ticketNumber] ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Save className="h-3 w-3" />
-                      )}
+                      <Eye className="h-4 w-4 mr-1" /> View
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -2647,6 +2822,89 @@ function AdminTicketsTab() {
           </Table>
         </div>
       )}
+
+      <Dialog
+        open={!!viewTicket}
+        onOpenChange={(o) => !o && setViewTicket(null)}
+      >
+        <DialogContent
+          className="max-w-lg"
+          data-ocid="admin.tickets.view.dialog"
+        >
+          <DialogHeader>
+            <DialogTitle>
+              Ticket Details — {viewTicket?.ticketNumber}
+            </DialogTitle>
+          </DialogHeader>
+          {viewTicket && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="text-muted-foreground">Ticket #:</span>
+                  <span className="ml-1 font-medium">
+                    {viewTicket.ticketNumber}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Raised By:</span>
+                  <span className="ml-1 font-medium">
+                    {viewTicket.raisedBy}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Category:</span>
+                  <span className="ml-1 font-medium">
+                    {viewTicket.category}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Status:</span>
+                  <span
+                    className={`ml-1 px-2 py-0.5 rounded-full text-xs font-semibold ${statusColor(viewTicket.status)}`}
+                  >
+                    {viewTicket.status}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Created:</span>
+                  <span className="ml-1 font-medium">
+                    {nsToString(viewTicket.createdAt)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Resolved At:</span>
+                  <span className="ml-1 font-medium">
+                    {viewTicket.resolvedAt
+                      ? nsToString(viewTicket.resolvedAt)
+                      : "-"}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <p className="text-muted-foreground mb-1">Description:</p>
+                <p className="bg-gray-50 rounded p-3">
+                  {viewTicket.description}
+                </p>
+              </div>
+              {viewTicket.notes && (
+                <div>
+                  <p className="text-muted-foreground mb-1">Notes:</p>
+                  <p className="bg-gray-50 rounded p-3">{viewTicket.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setViewTicket(null)}
+              data-ocid="admin.tickets.view.close_button"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

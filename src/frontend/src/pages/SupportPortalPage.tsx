@@ -25,14 +25,16 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Download,
   Eye,
   KeyRound,
   Loader2,
   LogOut,
   RefreshCw,
   Ticket,
+  User,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type {
   Employee,
@@ -40,8 +42,9 @@ import type {
   Ticket as TicketType,
 } from "../backend.d";
 import { useActor } from "../hooks/useActor";
+import { useFileUpload } from "../hooks/useFileUpload";
 
-type Section = "tickets" | "change-password";
+type Section = "tickets" | "change-password" | "profile";
 
 function nsToString(ns: bigint | null | undefined): string {
   if (!ns && ns !== BigInt(0)) return "-";
@@ -54,9 +57,23 @@ function statusColor(status: string): string {
   return "bg-red-100 text-red-800";
 }
 
+const exportCSV = (headers: string[], rows: string[][], filename: string) => {
+  const csv = [headers, ...rows]
+    .map((r) => r.map((c) => `"${c.replace(/"/g, '""')}`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function SupportPortalPage() {
   const { actor: _actor } = useActor();
   const actor = _actor as unknown as FullBackendInterface | null;
+  const { uploadFile, getFileUrl, ready: storageReady } = useFileUpload();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loginId, setLoginId] = useState("");
   const [loginPass, setLoginPass] = useState("");
@@ -72,11 +89,20 @@ export default function SupportPortalPage() {
   const [editNotes, setEditNotes] = useState("");
   const [saveLoading, setSaveLoading] = useState(false);
 
+  // Date range for export
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
   // Password state
   const [oldPass, setOldPass] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
+
+  // Profile photo state
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   async function handleLogin() {
     if (!actor) return;
@@ -91,6 +117,11 @@ export default function SupportPortalPage() {
       } else {
         setEmployee(result);
         loadTickets();
+        if (result.profilePhotoFileId) {
+          getFileUrl(result.profilePhotoFileId)
+            .then(setPhotoUrl)
+            .catch(() => {});
+        }
       }
     } catch {
       setLoginError("Login failed. Please try again.");
@@ -167,6 +198,58 @@ export default function SupportPortalPage() {
     } finally {
       setPwLoading(false);
     }
+  }
+
+  async function handlePhotoUpload(file: File) {
+    if (!actor || !employee || !storageReady) return;
+    setPhotoUploading(true);
+    try {
+      const fileId = await uploadFile(file);
+      await actor.updateEmployeeProfilePhoto(employee.employeeId, fileId);
+      const url = await getFileUrl(fileId);
+      setPhotoUrl(url);
+      const updated = await actor.getEmployee(employee.employeeId);
+      if (updated) setEmployee(updated);
+      toast.success("Profile photo updated!");
+    } catch {
+      toast.error("Failed to upload photo.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
+  const filteredTickets = tickets.filter((t) => {
+    if (!startDate && !endDate) return true;
+    const created = new Date(Number(t.createdAt) / 1_000_000);
+    if (startDate && created < new Date(startDate)) return false;
+    if (endDate && created > new Date(`${endDate}T23:59:59`)) return false;
+    return true;
+  });
+
+  function handleExport() {
+    const headers = [
+      "Ticket #",
+      "Raised By",
+      "Category",
+      "Description",
+      "Status",
+      "Created",
+      "Notes",
+    ];
+    const rows = filteredTickets.map((t) => [
+      t.ticketNumber,
+      t.raisedBy,
+      t.category,
+      t.description,
+      t.status,
+      nsToString(t.createdAt),
+      t.notes || "",
+    ]);
+    exportCSV(
+      headers,
+      rows,
+      `support_tickets_${startDate || "all"}_${endDate || "all"}.csv`,
+    );
   }
 
   // Login screen
@@ -264,6 +347,7 @@ export default function SupportPortalPage() {
               setEmployee(null);
               setLoginId("");
               setLoginPass("");
+              setPhotoUrl(null);
             }}
             data-ocid="support.logout.button"
           >
@@ -284,6 +368,7 @@ export default function SupportPortalPage() {
                   label: "Change Password",
                   icon: KeyRound,
                 },
+                { id: "profile", label: "Profile", icon: User },
               ] as const
             ).map(({ id, label, icon: Icon }) => (
               <button
@@ -306,9 +391,10 @@ export default function SupportPortalPage() {
         </aside>
 
         <main className="flex-1">
+          {/* Tickets section */}
           {section === "tickets" && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold" style={{ color: "#000080" }}>
                   All Tickets
                 </h2>
@@ -325,6 +411,41 @@ export default function SupportPortalPage() {
                   Refresh
                 </Button>
               </div>
+
+              {/* Date range filter + export */}
+              <div className="flex flex-wrap items-end gap-3 p-3 bg-gray-50 rounded-lg border mb-4">
+                <div>
+                  <Label className="text-xs mb-1 block">From Date</Label>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-40 text-sm"
+                    data-ocid="support.tickets.start_date.input"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1 block">To Date</Label>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-40 text-sm"
+                    data-ocid="support.tickets.end_date.input"
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleExport}
+                  disabled={filteredTickets.length === 0}
+                  className="text-white font-semibold"
+                  style={{ backgroundColor: "#000080" }}
+                  data-ocid="support.tickets.export.button"
+                >
+                  <Download className="h-4 w-4 mr-1" /> Export CSV
+                </Button>
+              </div>
+
               {ticketsLoading ? (
                 <div
                   className="flex items-center gap-2 text-gray-500"
@@ -333,7 +454,7 @@ export default function SupportPortalPage() {
                   <Loader2 className="h-5 w-5 animate-spin" /> Loading
                   tickets...
                 </div>
-              ) : tickets.length === 0 ? (
+              ) : filteredTickets.length === 0 ? (
                 <p
                   className="text-gray-500 text-sm"
                   data-ocid="support.tickets.empty_state"
@@ -355,7 +476,7 @@ export default function SupportPortalPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {tickets.map((t, i) => (
+                      {filteredTickets.map((t, i) => (
                         <TableRow
                           key={t.ticketNumber}
                           data-ocid={`support.tickets.item.${i + 1}`}
@@ -397,6 +518,7 @@ export default function SupportPortalPage() {
             </div>
           )}
 
+          {/* Change Password */}
           {section === "change-password" && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h2
@@ -454,10 +576,98 @@ export default function SupportPortalPage() {
               </div>
             </div>
           )}
+
+          {/* Profile */}
+          {section === "profile" && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h2
+                className="text-xl font-bold mb-6"
+                style={{ color: "#000080" }}
+              >
+                My Profile
+              </h2>
+
+              {/* Profile Photo */}
+              <div className="flex flex-col items-center mb-8">
+                <div
+                  className="relative w-20 h-20 rounded-full overflow-hidden border-4 mb-3"
+                  style={{ borderColor: "#000080" }}
+                >
+                  {photoUrl ? (
+                    <img
+                      src={photoUrl}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="w-full h-full flex items-center justify-center text-white text-2xl font-bold"
+                      style={{ backgroundColor: "#000080" }}
+                    >
+                      {employee.firstName?.[0]}
+                      {employee.lastName?.[0]}
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handlePhotoUpload(file);
+                  }}
+                  data-ocid="support.profile.upload_button"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading || !storageReady}
+                  style={{ borderColor: "#000080", color: "#000080" }}
+                  data-ocid="support.profile.photo_button"
+                >
+                  {photoUploading ? (
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  ) : null}
+                  {photoUploading ? "Uploading..." : "Upload Photo"}
+                </Button>
+              </div>
+
+              {/* Profile Details (read-only) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {(
+                  [
+                    ["First Name", employee.firstName],
+                    ["Last Name", employee.lastName],
+                    ["Email", employee.email],
+                    ["Mobile", employee.mobile],
+                    ["Date of Birth", employee.dob],
+                    ["Date of Joining", employee.dateOfJoining],
+                    ["Position", employee.position],
+                    ["Address", employee.address],
+                    ["City", employee.city],
+                    ["State", employee.state],
+                    ["Pincode", employee.pincode],
+                  ] as [string, string][]
+                ).map(([label, value]) => (
+                  <div key={label}>
+                    <Label className="text-xs text-gray-500 mb-0.5 block">
+                      {label}
+                    </Label>
+                    <p className="text-sm font-medium text-gray-800 bg-gray-50 rounded px-3 py-2">
+                      {value || "-"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
-      {/* View Ticket Dialog */}
+      {/* View/Edit Ticket Dialog */}
       <Dialog
         open={!!viewTicket}
         onOpenChange={(o) => !o && setViewTicket(null)}

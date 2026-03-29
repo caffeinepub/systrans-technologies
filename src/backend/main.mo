@@ -106,6 +106,35 @@ actor {
     name : Text;
   };
 
+  // Internal base type — matches the OLD Employee type exactly (no new fields).
+  // Keeping the same structure preserves upgrade compatibility for the `employees` stable map.
+  type EmployeeBase = {
+    employeeId : Text;
+    passwordHash : Text;
+    firstName : Text;
+    lastName : Text;
+    dob : Text;
+    maritalStatus : Text;
+    address : Text;
+    pincode : Text;
+    panNumber : Text;
+    aadharNumber : Text;
+    dateOfJoining : Text;
+    role : Text;
+    position : Text;
+    salary : Text;
+  };
+
+  // Internal extra-fields type — stored separately, starts empty on upgrade.
+  type EmployeeExtra = {
+    email : Text;
+    mobile : Text;
+    city : Text;
+    state : Text;
+    profilePhotoFileId : Text;
+  };
+
+  // Public-facing Employee type with ALL fields combined.
   public type Employee = {
     employeeId : Text;
     passwordHash : Text;
@@ -121,6 +150,11 @@ actor {
     role : Text;
     position : Text;
     salary : Text;
+    email : Text;
+    mobile : Text;
+    city : Text;
+    state : Text;
+    profilePhotoFileId : Text;
   };
 
   public type TimesheetEntry = {
@@ -142,7 +176,7 @@ actor {
     notes : Text;
   };
 
-  // Persistent state (stable so data survives upgrades)
+  // ── Stable state ──────────────────────────────────────────────────────────
   var nextJobId = 0;
   var nextTemplateId = 0;
   var nextEmployeeId = 0;
@@ -155,11 +189,19 @@ actor {
   var mailConfig : ?MailConfig = null;
   let customMailTemplates = Map.empty<Nat, CustomMailTemplate>();
   let userProfiles = Map.empty<Principal, UserProfile>();
-  let employees = Map.empty<Text, Employee>();
+
+  // NOTE: `employees` uses EmployeeBase — structurally identical to the old
+  // Employee type, so the stable upgrade is compatible.
+  let employees = Map.empty<Text, EmployeeBase>();
+
+  // New stable map for extra fields — starts empty on first upgrade, no compat issue.
+  let employeeExtras = Map.empty<Text, EmployeeExtra>();
+
   let timesheetEntries = Map.empty<Text, TimesheetEntry>();
   let tickets = Map.empty<Text, Ticket>();
   var adminPasswordHash : Text = "Kumaresh@436314";
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
   func formatEmployeeId(n : Nat) : Text {
     let s = n.toText();
     if (s.size() == 1) { "SYS00" # s }
@@ -178,7 +220,45 @@ actor {
     "TS" # n.toText();
   };
 
-  // User Profile
+  // Combine base record + extra record into the public Employee type.
+  func combineEmployee(base : EmployeeBase, extra : EmployeeExtra) : Employee {
+    {
+      employeeId       = base.employeeId;
+      passwordHash     = base.passwordHash;
+      firstName        = base.firstName;
+      lastName         = base.lastName;
+      dob              = base.dob;
+      maritalStatus    = base.maritalStatus;
+      address          = base.address;
+      pincode          = base.pincode;
+      panNumber        = base.panNumber;
+      aadharNumber     = base.aadharNumber;
+      dateOfJoining    = base.dateOfJoining;
+      role             = base.role;
+      position         = base.position;
+      salary           = base.salary;
+      email            = extra.email;
+      mobile           = extra.mobile;
+      city             = extra.city;
+      state            = extra.state;
+      profilePhotoFileId = extra.profilePhotoFileId;
+    };
+  };
+
+  func toEmployee(empId : Text) : ?Employee {
+    switch (employees.get(empId)) {
+      case null { null };
+      case (?base) {
+        let extra = switch (employeeExtras.get(empId)) {
+          case null { { email = ""; mobile = ""; city = ""; state = ""; profilePhotoFileId = "" } };
+          case (?e) { e };
+        };
+        ?combineEmployee(base, extra);
+      };
+    };
+  };
+
+  // ── User Profile ──────────────────────────────────────────────────────────
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     userProfiles.get(caller);
   };
@@ -191,7 +271,7 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // Job Positions
+  // ── Job Positions ─────────────────────────────────────────────────────────
   public shared func createJobPosition(input : JobPosition) : async JobPosition {
     let newJob : JobPosition = {
       input with
@@ -223,7 +303,7 @@ actor {
     jobPositions.remove(id);
   };
 
-  // Contact Form
+  // ── Contact Form ──────────────────────────────────────────────────────────
   public shared func submitContactForm(submission : ContactFormSubmission) : async () {
     contactFormSubmissions.add(submission);
   };
@@ -232,7 +312,7 @@ actor {
     contactFormSubmissions.toArray();
   };
 
-  // ROI Form
+  // ── ROI Form ──────────────────────────────────────────────────────────────
   public shared func submitROILead(roi : ROINewLead) : async () {
     roiLeads.add(roi);
   };
@@ -241,7 +321,7 @@ actor {
     roiLeads.toArray();
   };
 
-  // Job Applications
+  // ── Job Applications ──────────────────────────────────────────────────────
   public shared func submitJobApplication(application : JobApplication) : async () {
     jobApplications.add(application);
   };
@@ -250,7 +330,7 @@ actor {
     jobApplications.toArray();
   };
 
-  // Mail Configuration
+  // ── Mail Configuration ────────────────────────────────────────────────────
   public shared func setMailConfig(config : MailConfig) : async () {
     mailConfig := ?config;
   };
@@ -259,7 +339,7 @@ actor {
     mailConfig;
   };
 
-  // Custom Mail Templates
+  // ── Custom Mail Templates ─────────────────────────────────────────────────
   public shared func createCustomMailTemplate(input : CustomMailTemplate) : async CustomMailTemplate {
     let newTemplate : CustomMailTemplate = {
       input with
@@ -283,32 +363,81 @@ actor {
     customMailTemplates.values().toArray();
   };
 
-  // Employee Management
+  // ── Employee Management ───────────────────────────────────────────────────
   public shared func createEmployee(input : Employee) : async Employee {
     nextEmployeeId += 1;
     let empId = formatEmployeeId(nextEmployeeId);
-    let newEmployee : Employee = {
-      input with
-      employeeId = empId;
-      passwordHash = "SysTrans";
+    let base : EmployeeBase = {
+      employeeId    = empId;
+      passwordHash  = "SysTrans";
+      firstName     = input.firstName;
+      lastName      = input.lastName;
+      dob           = input.dob;
+      maritalStatus = input.maritalStatus;
+      address       = input.address;
+      pincode       = input.pincode;
+      panNumber     = input.panNumber;
+      aadharNumber  = input.aadharNumber;
+      dateOfJoining = input.dateOfJoining;
+      role          = input.role;
+      position      = input.position;
+      salary        = input.salary;
     };
-    employees.add(empId, newEmployee);
-    newEmployee;
+    let extra : EmployeeExtra = {
+      email            = input.email;
+      mobile           = input.mobile;
+      city             = input.city;
+      state            = input.state;
+      profilePhotoFileId = input.profilePhotoFileId;
+    };
+    employees.add(empId, base);
+    employeeExtras.add(empId, extra);
+    combineEmployee(base, extra);
   };
 
   public query func getAllEmployees() : async [Employee] {
-    employees.values().toArray();
+    employees.values().toArray().map(func(base : EmployeeBase) : Employee {
+      let extra = switch (employeeExtras.get(base.employeeId)) {
+        case null { { email = ""; mobile = ""; city = ""; state = ""; profilePhotoFileId = "" } };
+        case (?e) { e };
+      };
+      combineEmployee(base, extra);
+    });
   };
 
   public query func getEmployee(id : Text) : async ?Employee {
-    employees.get(id);
+    toEmployee(id);
   };
 
   public shared func updateEmployee(id : Text, data : Employee) : async Bool {
     switch (employees.get(id)) {
       case null { false };
-      case (?_existing) {
-        employees.add(id, { data with employeeId = id });
+      case (?_) {
+        let base : EmployeeBase = {
+          employeeId    = id;
+          passwordHash  = data.passwordHash;
+          firstName     = data.firstName;
+          lastName      = data.lastName;
+          dob           = data.dob;
+          maritalStatus = data.maritalStatus;
+          address       = data.address;
+          pincode       = data.pincode;
+          panNumber     = data.panNumber;
+          aadharNumber  = data.aadharNumber;
+          dateOfJoining = data.dateOfJoining;
+          role          = data.role;
+          position      = data.position;
+          salary        = data.salary;
+        };
+        let extra : EmployeeExtra = {
+          email            = data.email;
+          mobile           = data.mobile;
+          city             = data.city;
+          state            = data.state;
+          profilePhotoFileId = data.profilePhotoFileId;
+        };
+        employees.add(id, base);
+        employeeExtras.add(id, extra);
         true;
       };
     };
@@ -319,6 +448,7 @@ actor {
       case null { false };
       case (?_) {
         employees.remove(id);
+        employeeExtras.remove(id);
         true;
       };
     };
@@ -327,8 +457,10 @@ actor {
   public query func employeeLogin(employeeId : Text, password : Text) : async ?Employee {
     switch (employees.get(employeeId)) {
       case null { null };
-      case (?emp) {
-        if (emp.passwordHash == password) { ?emp } else { null };
+      case (?base) {
+        if (base.passwordHash == password) {
+          toEmployee(employeeId);
+        } else { null };
       };
     };
   };
@@ -336,16 +468,30 @@ actor {
   public shared func changeEmployeePassword(employeeId : Text, oldPassword : Text, newPassword : Text) : async Bool {
     switch (employees.get(employeeId)) {
       case null { false };
-      case (?emp) {
-        if (emp.passwordHash == oldPassword) {
-          employees.add(employeeId, { emp with passwordHash = newPassword });
+      case (?base) {
+        if (base.passwordHash == oldPassword) {
+          employees.add(employeeId, { base with passwordHash = newPassword });
           true;
         } else { false };
       };
     };
   };
 
-  // Timesheet
+  public shared func updateEmployeeProfilePhoto(employeeId : Text, fileId : Text) : async Bool {
+    switch (employeeExtras.get(employeeId)) {
+      case null {
+        // create entry if it doesn't exist yet
+        employeeExtras.add(employeeId, { email = ""; mobile = ""; city = ""; state = ""; profilePhotoFileId = fileId });
+        true;
+      };
+      case (?extra) {
+        employeeExtras.add(employeeId, { extra with profilePhotoFileId = fileId });
+        true;
+      };
+    };
+  };
+
+  // ── Timesheet ─────────────────────────────────────────────────────────────
   public shared func checkIn(employeeId : Text, date : Text) : async TimesheetEntry {
     let id = formatTimesheetId(nextTimesheetId);
     nextTimesheetId += 1;
@@ -395,7 +541,7 @@ actor {
     timesheetEntries.values().toArray();
   };
 
-  // Tickets
+  // ── Tickets ───────────────────────────────────────────────────────────────
   public shared func createTicket(employeeId : Text, category : Text, description : Text) : async Ticket {
     nextTicketId += 1;
     let ticketNumber = formatTicketNumber(nextTicketId);
@@ -434,7 +580,7 @@ actor {
     };
   };
 
-  // Admin Password
+  // ── Admin Password ────────────────────────────────────────────────────────
   public query func getAdminPasswordHash() : async Text {
     adminPasswordHash;
   };

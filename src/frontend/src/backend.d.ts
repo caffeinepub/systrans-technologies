@@ -72,6 +72,11 @@ export interface Employee {
     lastName: string;
     maritalStatus: string;
     firstName: string;
+    email: string;
+    mobile: string;
+    city: string;
+    state: string;
+    profilePhotoFileId: string;
 }
 export interface Ticket {
     status: string;
@@ -142,6 +147,7 @@ export interface backendInterface {
     submitROILead(roi: ROINewLead): Promise<void>;
     updateCustomMailTemplate(id: bigint, template: CustomMailTemplate): Promise<void>;
     updateEmployee(id: string, data: Employee): Promise<boolean>;
+    updateEmployeeProfilePhoto(employeeId: string, fileId: string): Promise<boolean>;
     updateJobPosition(id: bigint, position: JobPosition): Promise<void>;
     updateTicketStatus(ticketNumber: string, status: string, notes: string): Promise<boolean>;
     verifyAdminPassword(password: string): Promise<boolean>;

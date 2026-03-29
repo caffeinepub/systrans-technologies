@@ -39,6 +39,11 @@ export interface Employee {
   'lastName' : string,
   'maritalStatus' : string,
   'firstName' : string,
+  'email' : string,
+  'mobile' : string,
+  'city' : string,
+  'state' : string,
+  'profilePhotoFileId' : string,
 }
 export interface JobApplication {
   'yearsOfExperience' : string,
@@ -174,6 +179,7 @@ export interface _SERVICE {
     undefined
   >,
   'updateEmployee' : ActorMethod<[string, Employee], boolean>,
+  'updateEmployeeProfilePhoto' : ActorMethod<[string, string], boolean>,
   'updateJobPosition' : ActorMethod<[bigint, JobPosition], undefined>,
   'updateTicketStatus' : ActorMethod<[string, string, string], boolean>,
   'verifyAdminPassword' : ActorMethod<[string], boolean>,

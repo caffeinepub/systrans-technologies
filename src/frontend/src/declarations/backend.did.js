@@ -54,6 +54,11 @@ export const Employee = IDL.Record({
   'lastName' : IDL.Text,
   'maritalStatus' : IDL.Text,
   'firstName' : IDL.Text,
+  'email' : IDL.Text,
+  'mobile' : IDL.Text,
+  'city' : IDL.Text,
+  'state' : IDL.Text,
+  'profilePhotoFileId' : IDL.Text,
 });
 export const JobPosition = IDL.Record({
   'id' : IDL.Text,
@@ -212,6 +217,7 @@ export const idlService = IDL.Service({
   'submitROILead' : IDL.Func([ROINewLead], [], []),
   'updateCustomMailTemplate' : IDL.Func([IDL.Nat, CustomMailTemplate], [], []),
   'updateEmployee' : IDL.Func([IDL.Text, Employee], [IDL.Bool], []),
+  'updateEmployeeProfilePhoto' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
   'updateJobPosition' : IDL.Func([IDL.Nat, JobPosition], [], []),
   'updateTicketStatus' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text],
@@ -270,6 +276,11 @@ export const idlFactory = ({ IDL }) => {
     'lastName' : IDL.Text,
     'maritalStatus' : IDL.Text,
     'firstName' : IDL.Text,
+    'email' : IDL.Text,
+    'mobile' : IDL.Text,
+    'city' : IDL.Text,
+    'state' : IDL.Text,
+    'profilePhotoFileId' : IDL.Text,
   });
   const JobPosition = IDL.Record({
     'id' : IDL.Text,
@@ -437,6 +448,7 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'updateEmployee' : IDL.Func([IDL.Text, Employee], [IDL.Bool], []),
+    'updateEmployeeProfilePhoto' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
     'updateJobPosition' : IDL.Func([IDL.Nat, JobPosition], [], []),
     'updateTicketStatus' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text],

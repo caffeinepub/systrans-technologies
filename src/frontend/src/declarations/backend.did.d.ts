@@ -43,7 +43,14 @@ export interface Employee {
   'mobile' : string,
   'city' : string,
   'state' : string,
-  'profilePhotoFileId' : string,
+}
+export interface Announcement {
+  'id' : string,
+  'title' : string,
+  'content' : string,
+  'mediaFileId' : string,
+  'mediaType' : string,
+  'createdAt' : Time,
 }
 export interface JobApplication {
   'yearsOfExperience' : string,
@@ -134,6 +141,7 @@ export interface _SERVICE {
   'changeEmployeePassword' : ActorMethod<[string, string, string], boolean>,
   'checkIn' : ActorMethod<[string, string], TimesheetEntry>,
   'checkOut' : ActorMethod<[string, string], [] | [TimesheetEntry]>,
+  'createAnnouncement' : ActorMethod<[string, string, string, string], Announcement>,
   'createCustomMailTemplate' : ActorMethod<
     [CustomMailTemplate],
     CustomMailTemplate
@@ -141,12 +149,14 @@ export interface _SERVICE {
   'createEmployee' : ActorMethod<[Employee], Employee>,
   'createJobPosition' : ActorMethod<[JobPosition], JobPosition>,
   'createTicket' : ActorMethod<[string, string, string], Ticket>,
+  'deleteAnnouncement' : ActorMethod<[string], boolean>,
   'deleteCustomMailTemplate' : ActorMethod<[bigint], undefined>,
   'deleteEmployee' : ActorMethod<[string], boolean>,
   'deleteJobPosition' : ActorMethod<[bigint], undefined>,
   'employeeLogin' : ActorMethod<[string, string], [] | [Employee]>,
   'getAdminPasswordHash' : ActorMethod<[], string>,
   'getAllActiveJobPositions' : ActorMethod<[], Array<JobPosition>>,
+  'getAllAnnouncements' : ActorMethod<[], Array<Announcement>>,
   'getAllContactSubmissions' : ActorMethod<[], Array<ContactFormSubmission>>,
   'getAllCustomMailTemplates' : ActorMethod<[], Array<CustomMailTemplate>>,
   'getAllEmployees' : ActorMethod<[], Array<Employee>>,
@@ -179,7 +189,6 @@ export interface _SERVICE {
     undefined
   >,
   'updateEmployee' : ActorMethod<[string, Employee], boolean>,
-  'updateEmployeeProfilePhoto' : ActorMethod<[string, string], boolean>,
   'updateJobPosition' : ActorMethod<[bigint, JobPosition], undefined>,
   'updateTicketStatus' : ActorMethod<[string, string, string], boolean>,
   'verifyAdminPassword' : ActorMethod<[string], boolean>,

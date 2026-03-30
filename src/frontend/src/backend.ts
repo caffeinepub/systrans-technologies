@@ -165,6 +165,10 @@ export interface Employee {
     lastName: string;
     maritalStatus: string;
     firstName: string;
+    email: string;
+    mobile: string;
+    city: string;
+    state: string;
 }
 export interface Ticket {
     status: string;
@@ -175,6 +179,14 @@ export interface Ticket {
     category: string;
     raisedBy: string;
     resolvedAt?: Time;
+}
+export interface Announcement {
+    id: string;
+    title: string;
+    content: string;
+    mediaFileId: string;
+    mediaType: string;
+    createdAt: Time;
 }
 export interface UserProfile {
     name: string;
@@ -210,8 +222,10 @@ export interface backendInterface {
     createEmployee(input: Employee): Promise<Employee>;
     createJobPosition(input: JobPosition): Promise<JobPosition>;
     createTicket(employeeId: string, category: string, description: string): Promise<Ticket>;
+    createAnnouncement(title: string, content: string, mediaFileId: string, mediaType: string): Promise<Announcement>;
     deleteCustomMailTemplate(id: bigint): Promise<void>;
     deleteEmployee(id: string): Promise<boolean>;
+    deleteAnnouncement(id: string): Promise<boolean>;
     deleteJobPosition(id: bigint): Promise<void>;
     employeeLogin(employeeId: string, password: string): Promise<Employee | null>;
     getAdminPasswordHash(): Promise<string>;
@@ -223,6 +237,7 @@ export interface backendInterface {
     getAllJobPositions(): Promise<Array<JobPosition>>;
     getAllROINewLeads(): Promise<Array<ROINewLead>>;
     getAllTickets(): Promise<Array<Ticket>>;
+    getAllAnnouncements(): Promise<Array<Announcement>>;
     getAllTimesheets(): Promise<Array<TimesheetEntry>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
@@ -949,6 +964,59 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+
+    async createAnnouncement(arg0: string, arg1: string, arg2: string, arg3: string): Promise<Announcement> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.createAnnouncement(arg0, arg1, arg2, arg3);
+                return from_candid_Announcement(result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.createAnnouncement(arg0, arg1, arg2, arg3);
+            return from_candid_Announcement(result);
+        }
+    }
+    async getAllAnnouncements(): Promise<Array<Announcement>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAllAnnouncements();
+                return result.map(from_candid_Announcement);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAllAnnouncements();
+            return result.map(from_candid_Announcement);
+        }
+    }
+    async deleteAnnouncement(arg0: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteAnnouncement(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteAnnouncement(arg0);
+            return result;
+        }
+    }
+}
+function from_candid_Announcement(value: import('./declarations/backend.did.d.ts').Announcement): Announcement {
+    return {
+        id: value.id,
+        title: value.title,
+        content: value.content,
+        mediaFileId: value.mediaFileId,
+        mediaType: value.mediaType,
+        createdAt: value.createdAt,
+    };
 }
 function from_candid_Ticket_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Ticket): Ticket {
     return from_candid_record_n15(_uploadFile, _downloadFile, value);

@@ -183,25 +183,25 @@ actor {
   };
 
   // ── Stable state ──────────────────────────────────────────────────────────
-  var nextJobId = 0;
-  var nextTemplateId = 0;
-  var nextEmployeeId = 0;
-  var nextTimesheetId = 0;
-  var nextTicketId = 0;
-  var nextAnnouncementId = 0;
-  let jobPositions = Map.empty<Nat, JobPosition>();
-  var contactFormSubmissions = List.empty<ContactFormSubmission>();
-  var roiLeads = List.empty<ROINewLead>();
-  var jobApplications = List.empty<JobApplication>();
-  var mailConfig : ?MailConfig = null;
-  let customMailTemplates = Map.empty<Nat, CustomMailTemplate>();
-  let userProfiles = Map.empty<Principal, UserProfile>();
-  let employees = Map.empty<Text, EmployeeBase>();
-  let employeeExtras = Map.empty<Text, EmployeeExtra>();
-  let timesheetEntries = Map.empty<Text, TimesheetEntry>();
-  let tickets = Map.empty<Text, Ticket>();
-  let announcements = Map.empty<Text, Announcement>();
-  var adminPasswordHash : Text = "Kumaresh@436314";
+  stable var nextJobId = 0;
+  stable var nextTemplateId = 0;
+  stable var nextEmployeeId = 0;
+  stable var nextTimesheetId = 0;
+  stable var nextTicketId = 0;
+  stable var nextAnnouncementId = 0;
+  stable let jobPositions = Map.empty<Nat, JobPosition>();
+  stable var contactFormSubmissions = List.empty<ContactFormSubmission>();
+  stable var roiLeads = List.empty<ROINewLead>();
+  stable var jobApplications = List.empty<JobApplication>();
+  stable var mailConfig : ?MailConfig = null;
+  stable let customMailTemplates = Map.empty<Nat, CustomMailTemplate>();
+  stable let userProfiles = Map.empty<Principal, UserProfile>();
+  stable let employees = Map.empty<Text, EmployeeBase>();
+  stable let employeeExtras = Map.empty<Text, EmployeeExtra>();
+  stable let timesheetEntries = Map.empty<Text, TimesheetEntry>();
+  stable let tickets = Map.empty<Text, Ticket>();
+  stable let announcements = Map.empty<Text, Announcement>();
+  stable var adminPasswordHash : Text = "Kumaresh@436314";
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   func formatEmployeeId(n : Nat) : Text {

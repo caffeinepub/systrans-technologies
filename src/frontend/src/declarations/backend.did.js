@@ -58,7 +58,14 @@ export const Employee = IDL.Record({
   'mobile' : IDL.Text,
   'city' : IDL.Text,
   'state' : IDL.Text,
-  'profilePhotoFileId' : IDL.Text,
+});
+export const Announcement = IDL.Record({
+  'id' : IDL.Text,
+  'title' : IDL.Text,
+  'content' : IDL.Text,
+  'mediaFileId' : IDL.Text,
+  'mediaType' : IDL.Text,
+  'createdAt' : Time,
 });
 export const JobPosition = IDL.Record({
   'id' : IDL.Text,
@@ -153,6 +160,11 @@ export const idlService = IDL.Service({
     ),
   'checkIn' : IDL.Func([IDL.Text, IDL.Text], [TimesheetEntry], []),
   'checkOut' : IDL.Func([IDL.Text, IDL.Text], [IDL.Opt(TimesheetEntry)], []),
+  'createAnnouncement' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [Announcement],
+      [],
+    ),
   'createCustomMailTemplate' : IDL.Func(
       [CustomMailTemplate],
       [CustomMailTemplate],
@@ -161,6 +173,7 @@ export const idlService = IDL.Service({
   'createEmployee' : IDL.Func([Employee], [Employee], []),
   'createJobPosition' : IDL.Func([JobPosition], [JobPosition], []),
   'createTicket' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [Ticket], []),
+  'deleteAnnouncement' : IDL.Func([IDL.Text], [IDL.Bool], []),
   'deleteCustomMailTemplate' : IDL.Func([IDL.Nat], [], []),
   'deleteEmployee' : IDL.Func([IDL.Text], [IDL.Bool], []),
   'deleteJobPosition' : IDL.Func([IDL.Nat], [], []),
@@ -171,6 +184,7 @@ export const idlService = IDL.Service({
     ),
   'getAdminPasswordHash' : IDL.Func([], [IDL.Text], ['query']),
   'getAllActiveJobPositions' : IDL.Func([], [IDL.Vec(JobPosition)], ['query']),
+  'getAllAnnouncements' : IDL.Func([], [IDL.Vec(Announcement)], ['query']),
   'getAllContactSubmissions' : IDL.Func(
       [],
       [IDL.Vec(ContactFormSubmission)],
@@ -217,7 +231,6 @@ export const idlService = IDL.Service({
   'submitROILead' : IDL.Func([ROINewLead], [], []),
   'updateCustomMailTemplate' : IDL.Func([IDL.Nat, CustomMailTemplate], [], []),
   'updateEmployee' : IDL.Func([IDL.Text, Employee], [IDL.Bool], []),
-  'updateEmployeeProfilePhoto' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
   'updateJobPosition' : IDL.Func([IDL.Nat, JobPosition], [], []),
   'updateTicketStatus' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text],
@@ -280,7 +293,14 @@ export const idlFactory = ({ IDL }) => {
     'mobile' : IDL.Text,
     'city' : IDL.Text,
     'state' : IDL.Text,
-    'profilePhotoFileId' : IDL.Text,
+  });
+  const Announcement = IDL.Record({
+    'id' : IDL.Text,
+    'title' : IDL.Text,
+    'content' : IDL.Text,
+    'mediaFileId' : IDL.Text,
+    'mediaType' : IDL.Text,
+    'createdAt' : Time,
   });
   const JobPosition = IDL.Record({
     'id' : IDL.Text,
@@ -335,7 +355,7 @@ export const idlFactory = ({ IDL }) => {
     'contactTemplate' : MailTemplate,
     'roiTemplate' : MailTemplate,
   });
-  
+
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
         [IDL.Vec(IDL.Nat8)],
@@ -372,6 +392,11 @@ export const idlFactory = ({ IDL }) => {
       ),
     'checkIn' : IDL.Func([IDL.Text, IDL.Text], [TimesheetEntry], []),
     'checkOut' : IDL.Func([IDL.Text, IDL.Text], [IDL.Opt(TimesheetEntry)], []),
+    'createAnnouncement' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [Announcement],
+        [],
+      ),
     'createCustomMailTemplate' : IDL.Func(
         [CustomMailTemplate],
         [CustomMailTemplate],
@@ -380,6 +405,7 @@ export const idlFactory = ({ IDL }) => {
     'createEmployee' : IDL.Func([Employee], [Employee], []),
     'createJobPosition' : IDL.Func([JobPosition], [JobPosition], []),
     'createTicket' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [Ticket], []),
+    'deleteAnnouncement' : IDL.Func([IDL.Text], [IDL.Bool], []),
     'deleteCustomMailTemplate' : IDL.Func([IDL.Nat], [], []),
     'deleteEmployee' : IDL.Func([IDL.Text], [IDL.Bool], []),
     'deleteJobPosition' : IDL.Func([IDL.Nat], [], []),
@@ -394,6 +420,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(JobPosition)],
         ['query'],
       ),
+    'getAllAnnouncements' : IDL.Func([], [IDL.Vec(Announcement)], ['query']),
     'getAllContactSubmissions' : IDL.Func(
         [],
         [IDL.Vec(ContactFormSubmission)],
@@ -448,7 +475,6 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'updateEmployee' : IDL.Func([IDL.Text, Employee], [IDL.Bool], []),
-    'updateEmployeeProfilePhoto' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
     'updateJobPosition' : IDL.Func([IDL.Nat, JobPosition], [], []),
     'updateTicketStatus' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text],

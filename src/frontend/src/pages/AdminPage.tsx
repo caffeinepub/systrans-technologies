@@ -1942,7 +1942,6 @@ function EmployeesTab() {
         role: form.role,
         position: form.position,
         salary: form.salary,
-        profilePhotoFileId: "",
       });
       toast.success("Employee created!");
       setAddOpen(false);
@@ -2909,6 +2908,262 @@ function AdminTicketsTab() {
   );
 }
 
+function AnnouncementsTab() {
+  const { actor: _aActor } = useActor();
+  const actor = _aActor as unknown as FullBackendInterface | null;
+  const { uploadFile, getFileUrl, ready: storageReady } = useFileUpload();
+  const [announcements, setAnnouncements] = useState<
+    import("../backend.d").Announcement[]
+  >([]);
+  const [loading, setLoading] = useState(false);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [mediaType, setMediaType] = useState<"none" | "image" | "video">(
+    "none",
+  );
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
+
+  const loadAnnouncements = useCallback(async () => {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      const list = await actor.getAllAnnouncements();
+      setAnnouncements(list);
+      for (const a of list) {
+        if (a.mediaFileId && a.mediaType !== "none") {
+          getFileUrl(a.mediaFileId)
+            .then((url) => setMediaUrls((prev) => ({ ...prev, [a.id]: url })))
+            .catch(() => {});
+        }
+      }
+    } catch {
+      toast.error("Failed to load announcements.");
+    } finally {
+      setLoading(false);
+    }
+  }, [actor, getFileUrl]);
+
+  useEffect(() => {
+    if (actor) loadAnnouncements();
+  }, [actor, loadAnnouncements]);
+
+  async function handleCreate() {
+    if (!actor || !title.trim() || !content.trim()) {
+      toast.error("Title and content are required.");
+      return;
+    }
+    setCreating(true);
+    try {
+      let fileId = "";
+      if (mediaType !== "none" && mediaFile) {
+        fileId = await uploadFile(mediaFile);
+      }
+      await actor.createAnnouncement(
+        title.trim(),
+        content.trim(),
+        fileId,
+        mediaType,
+      );
+      toast.success("Announcement created!");
+      setTitle("");
+      setContent("");
+      setMediaType("none");
+      setMediaFile(null);
+      loadAnnouncements();
+    } catch {
+      toast.error("Failed to create announcement.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!actor) return;
+    if (!window.confirm("Delete this announcement?")) return;
+    try {
+      await actor.deleteAnnouncement(id);
+      toast.success("Announcement deleted.");
+      loadAnnouncements();
+    } catch {
+      toast.error("Failed to delete announcement.");
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Create Form */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+        <h2 className="text-lg font-bold mb-4" style={{ color: "#000080" }}>
+          Create Announcement
+        </h2>
+        <div className="space-y-4 max-w-2xl">
+          <div>
+            <Label className="mb-1 block text-gray-700">Title</Label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Announcement title"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2"
+              style={{ "--tw-ring-color": "#000080" } as React.CSSProperties}
+              data-ocid="admin.announcement.title.input"
+            />
+          </div>
+          <div>
+            <Label className="mb-1 block text-gray-700">Content</Label>
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Write your announcement..."
+              rows={4}
+              data-ocid="admin.announcement.content.textarea"
+            />
+          </div>
+          <div>
+            <Label className="mb-1 block text-gray-700">Media Type</Label>
+            <Select
+              value={mediaType}
+              onValueChange={(v) =>
+                setMediaType(v as "none" | "image" | "video")
+              }
+            >
+              <SelectTrigger
+                className="w-48"
+                data-ocid="admin.announcement.media_type.select"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="image">Image</SelectItem>
+                <SelectItem value="video">Video</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {mediaType !== "none" && (
+            <div>
+              <Label className="mb-1 block text-gray-700">
+                Upload {mediaType === "image" ? "Image" : "Video"}
+              </Label>
+              <input
+                type="file"
+                accept={mediaType === "image" ? "image/*" : "video/*"}
+                onChange={(e) => setMediaFile(e.target.files?.[0] || null)}
+                className="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                data-ocid="admin.announcement.upload_button"
+              />
+              {mediaFile && (
+                <p className="text-xs text-gray-500 mt-1">{mediaFile.name}</p>
+              )}
+            </div>
+          )}
+          <Button
+            onClick={handleCreate}
+            disabled={
+              creating || !actor || (mediaType !== "none" && !storageReady)
+            }
+            className="text-white font-semibold"
+            style={{ backgroundColor: "#000080" }}
+            data-ocid="admin.announcement.submit_button"
+          >
+            {creating ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4 mr-2" />
+            )}
+            {creating ? "Creating..." : "Create Announcement"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Announcements List */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+        <h2 className="text-lg font-bold mb-4" style={{ color: "#000080" }}>
+          All Announcements
+        </h2>
+        {loading ? (
+          <div
+            className="flex items-center gap-2 text-gray-500"
+            data-ocid="admin.announcements.loading_state"
+          >
+            <Loader2 className="h-5 w-5 animate-spin" /> Loading...
+          </div>
+        ) : announcements.length === 0 ? (
+          <p
+            className="text-gray-500 text-sm"
+            data-ocid="admin.announcements.empty_state"
+          >
+            No announcements yet.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {announcements
+              .slice()
+              .sort((a, b) => Number(b.createdAt - a.createdAt))
+              .map((ann, i) => (
+                <div
+                  key={ann.id}
+                  className="border border-gray-200 rounded-lg p-4"
+                  data-ocid={`admin.announcements.item.${i + 1}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3
+                        className="font-semibold text-sm"
+                        style={{ color: "#000080" }}
+                      >
+                        {ann.title}
+                      </h3>
+                      <p className="text-xs text-gray-500 mb-1">
+                        {new Date(
+                          Number(ann.createdAt) / 1_000_000,
+                        ).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </p>
+                      <p className="text-sm text-gray-700 whitespace-pre-line">
+                        {ann.content}
+                      </p>
+                      {ann.mediaType === "image" && mediaUrls[ann.id] && (
+                        <img
+                          src={mediaUrls[ann.id]}
+                          alt={ann.title}
+                          className="mt-2 rounded max-h-48 object-cover"
+                        />
+                      )}
+                      {ann.mediaType === "video" && mediaUrls[ann.id] && (
+                        <video
+                          src={mediaUrls[ann.id]}
+                          controls
+                          className="mt-2 rounded max-h-48 w-full"
+                        >
+                          <track kind="captions" />
+                        </video>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDelete(ann.id)}
+                      className="text-red-600 border-red-200 hover:bg-red-50 flex-shrink-0"
+                      data-ocid={`admin.announcements.delete_button.${i + 1}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { actor: _loginActor, isFetching: actorFetching } = useActor();
   const loginActor = _loginActor as unknown as FullBackendInterface | null;
@@ -3138,6 +3393,13 @@ export default function AdminPage() {
             >
               Tickets
             </TabsTrigger>
+            <TabsTrigger
+              value="announcements"
+              className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent"
+              data-ocid="admin.announcements.tab"
+            >
+              Announcements
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="jobs">
@@ -3169,6 +3431,9 @@ export default function AdminPage() {
           </TabsContent>
           <TabsContent value="tickets">
             <AdminTicketsTab />
+          </TabsContent>
+          <TabsContent value="announcements">
+            <AnnouncementsTab />
           </TabsContent>
         </Tabs>
       </main>

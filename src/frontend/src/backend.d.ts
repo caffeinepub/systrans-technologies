@@ -76,7 +76,6 @@ export interface Employee {
     mobile: string;
     city: string;
     state: string;
-    profilePhotoFileId: string;
 }
 export interface Ticket {
     status: string;
@@ -87,6 +86,14 @@ export interface Ticket {
     category: string;
     raisedBy: string;
     resolvedAt?: Time;
+}
+export interface Announcement {
+    id: string;
+    title: string;
+    content: string;
+    mediaFileId: string;
+    mediaType: string;
+    createdAt: Time;
 }
 export interface UserProfile {
     name: string;
@@ -111,16 +118,19 @@ export interface backendInterface {
     changeEmployeePassword(employeeId: string, oldPassword: string, newPassword: string): Promise<boolean>;
     checkIn(employeeId: string, date: string): Promise<TimesheetEntry>;
     checkOut(employeeId: string, date: string): Promise<TimesheetEntry | null>;
+    createAnnouncement(title: string, content: string, mediaFileId: string, mediaType: string): Promise<Announcement>;
     createCustomMailTemplate(input: CustomMailTemplate): Promise<CustomMailTemplate>;
     createEmployee(input: Employee): Promise<Employee>;
     createJobPosition(input: JobPosition): Promise<JobPosition>;
     createTicket(employeeId: string, category: string, description: string): Promise<Ticket>;
+    deleteAnnouncement(id: string): Promise<boolean>;
     deleteCustomMailTemplate(id: bigint): Promise<void>;
     deleteEmployee(id: string): Promise<boolean>;
     deleteJobPosition(id: bigint): Promise<void>;
     employeeLogin(employeeId: string, password: string): Promise<Employee | null>;
     getAdminPasswordHash(): Promise<string>;
     getAllActiveJobPositions(): Promise<Array<JobPosition>>;
+    getAllAnnouncements(): Promise<Array<Announcement>>;
     getAllContactSubmissions(): Promise<Array<ContactFormSubmission>>;
     getAllCustomMailTemplates(): Promise<Array<CustomMailTemplate>>;
     getAllEmployees(): Promise<Array<Employee>>;
@@ -147,7 +157,6 @@ export interface backendInterface {
     submitROILead(roi: ROINewLead): Promise<void>;
     updateCustomMailTemplate(id: bigint, template: CustomMailTemplate): Promise<void>;
     updateEmployee(id: string, data: Employee): Promise<boolean>;
-    updateEmployeeProfilePhoto(employeeId: string, fileId: string): Promise<boolean>;
     updateJobPosition(id: bigint, position: JobPosition): Promise<void>;
     updateTicketStatus(ticketNumber: string, status: string, notes: string): Promise<boolean>;
     verifyAdminPassword(password: string): Promise<boolean>;

@@ -106,35 +106,7 @@ actor {
     name : Text;
   };
 
-  // Internal base type — matches the OLD Employee type exactly (no new fields).
-  // Keeping the same structure preserves upgrade compatibility for the `employees` stable map.
-  type EmployeeBase = {
-    employeeId : Text;
-    passwordHash : Text;
-    firstName : Text;
-    lastName : Text;
-    dob : Text;
-    maritalStatus : Text;
-    address : Text;
-    pincode : Text;
-    panNumber : Text;
-    aadharNumber : Text;
-    dateOfJoining : Text;
-    role : Text;
-    position : Text;
-    salary : Text;
-  };
-
-  // Internal extra-fields type — stored separately, starts empty on upgrade.
-  type EmployeeExtra = {
-    email : Text;
-    mobile : Text;
-    city : Text;
-    state : Text;
-    profilePhotoFileId : Text;
-  };
-
-  // Public-facing Employee type with ALL fields combined.
+  // Public Employee type — no profilePhotoFileId
   public type Employee = {
     employeeId : Text;
     passwordHash : Text;
@@ -154,7 +126,6 @@ actor {
     mobile : Text;
     city : Text;
     state : Text;
-    profilePhotoFileId : Text;
   };
 
   public type TimesheetEntry = {
@@ -176,12 +147,48 @@ actor {
     notes : Text;
   };
 
+  public type Announcement = {
+    id : Text;
+    title : Text;
+    content : Text;
+    mediaFileId : Text;
+    mediaType : Text;
+    createdAt : Time.Time;
+  };
+
+  // Internal base type for stable upgrade compat
+  type EmployeeBase = {
+    employeeId : Text;
+    passwordHash : Text;
+    firstName : Text;
+    lastName : Text;
+    dob : Text;
+    maritalStatus : Text;
+    address : Text;
+    pincode : Text;
+    panNumber : Text;
+    aadharNumber : Text;
+    dateOfJoining : Text;
+    role : Text;
+    position : Text;
+    salary : Text;
+  };
+
+  type EmployeeExtra = {
+    email : Text;
+    mobile : Text;
+    city : Text;
+    state : Text;
+    profilePhotoFileId : Text; // kept for stable compat, not exposed
+  };
+
   // ── Stable state ──────────────────────────────────────────────────────────
   var nextJobId = 0;
   var nextTemplateId = 0;
   var nextEmployeeId = 0;
   var nextTimesheetId = 0;
   var nextTicketId = 0;
+  var nextAnnouncementId = 0;
   let jobPositions = Map.empty<Nat, JobPosition>();
   var contactFormSubmissions = List.empty<ContactFormSubmission>();
   var roiLeads = List.empty<ROINewLead>();
@@ -189,16 +196,11 @@ actor {
   var mailConfig : ?MailConfig = null;
   let customMailTemplates = Map.empty<Nat, CustomMailTemplate>();
   let userProfiles = Map.empty<Principal, UserProfile>();
-
-  // NOTE: `employees` uses EmployeeBase — structurally identical to the old
-  // Employee type, so the stable upgrade is compatible.
   let employees = Map.empty<Text, EmployeeBase>();
-
-  // New stable map for extra fields — starts empty on first upgrade, no compat issue.
   let employeeExtras = Map.empty<Text, EmployeeExtra>();
-
   let timesheetEntries = Map.empty<Text, TimesheetEntry>();
   let tickets = Map.empty<Text, Ticket>();
+  let announcements = Map.empty<Text, Announcement>();
   var adminPasswordHash : Text = "Kumaresh@436314";
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -220,28 +222,26 @@ actor {
     "TS" # n.toText();
   };
 
-  // Combine base record + extra record into the public Employee type.
   func combineEmployee(base : EmployeeBase, extra : EmployeeExtra) : Employee {
     {
-      employeeId       = base.employeeId;
-      passwordHash     = base.passwordHash;
-      firstName        = base.firstName;
-      lastName         = base.lastName;
-      dob              = base.dob;
-      maritalStatus    = base.maritalStatus;
-      address          = base.address;
-      pincode          = base.pincode;
-      panNumber        = base.panNumber;
-      aadharNumber     = base.aadharNumber;
-      dateOfJoining    = base.dateOfJoining;
-      role             = base.role;
-      position         = base.position;
-      salary           = base.salary;
-      email            = extra.email;
-      mobile           = extra.mobile;
-      city             = extra.city;
-      state            = extra.state;
-      profilePhotoFileId = extra.profilePhotoFileId;
+      employeeId    = base.employeeId;
+      passwordHash  = base.passwordHash;
+      firstName     = base.firstName;
+      lastName      = base.lastName;
+      dob           = base.dob;
+      maritalStatus = base.maritalStatus;
+      address       = base.address;
+      pincode       = base.pincode;
+      panNumber     = base.panNumber;
+      aadharNumber  = base.aadharNumber;
+      dateOfJoining = base.dateOfJoining;
+      role          = base.role;
+      position      = base.position;
+      salary        = base.salary;
+      email         = extra.email;
+      mobile        = extra.mobile;
+      city          = extra.city;
+      state         = extra.state;
     };
   };
 
@@ -388,7 +388,7 @@ actor {
       mobile           = input.mobile;
       city             = input.city;
       state            = input.state;
-      profilePhotoFileId = input.profilePhotoFileId;
+      profilePhotoFileId = "";
     };
     employees.add(empId, base);
     employeeExtras.add(empId, extra);
@@ -429,12 +429,16 @@ actor {
           position      = data.position;
           salary        = data.salary;
         };
+        let oldExtra = switch (employeeExtras.get(id)) {
+          case null { { email = ""; mobile = ""; city = ""; state = ""; profilePhotoFileId = "" } };
+          case (?e) { e };
+        };
         let extra : EmployeeExtra = {
           email            = data.email;
           mobile           = data.mobile;
           city             = data.city;
           state            = data.state;
-          profilePhotoFileId = data.profilePhotoFileId;
+          profilePhotoFileId = oldExtra.profilePhotoFileId;
         };
         employees.add(id, base);
         employeeExtras.add(id, extra);
@@ -473,20 +477,6 @@ actor {
           employees.add(employeeId, { base with passwordHash = newPassword });
           true;
         } else { false };
-      };
-    };
-  };
-
-  public shared func updateEmployeeProfilePhoto(employeeId : Text, fileId : Text) : async Bool {
-    switch (employeeExtras.get(employeeId)) {
-      case null {
-        // create entry if it doesn't exist yet
-        employeeExtras.add(employeeId, { email = ""; mobile = ""; city = ""; state = ""; profilePhotoFileId = fileId });
-        true;
-      };
-      case (?extra) {
-        employeeExtras.add(employeeId, { extra with profilePhotoFileId = fileId });
-        true;
       };
     };
   };
@@ -575,6 +565,36 @@ actor {
       case (?ticket) {
         let resolvedAt = if (status == "resolved") { ?Time.now() } else { ticket.resolvedAt };
         tickets.add(ticketNumber, { ticket with status; notes; resolvedAt });
+        true;
+      };
+    };
+  };
+
+  // ── Announcements ─────────────────────────────────────────────────────────
+  public shared func createAnnouncement(title : Text, content : Text, mediaFileId : Text, mediaType : Text) : async Announcement {
+    nextAnnouncementId += 1;
+    let id = nextAnnouncementId.toText();
+    let ann : Announcement = {
+      id;
+      title;
+      content;
+      mediaFileId;
+      mediaType;
+      createdAt = Time.now();
+    };
+    announcements.add(id, ann);
+    ann;
+  };
+
+  public query func getAllAnnouncements() : async [Announcement] {
+    announcements.values().toArray();
+  };
+
+  public shared func deleteAnnouncement(id : Text) : async Bool {
+    switch (announcements.get(id)) {
+      case null { false };
+      case (?_) {
+        announcements.remove(id);
         true;
       };
     };

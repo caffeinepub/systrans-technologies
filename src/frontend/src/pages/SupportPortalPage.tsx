@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Bell,
+  CheckCircle,
   Download,
   Eye,
   KeyRound,
@@ -32,19 +34,23 @@ import {
   LogOut,
   RefreshCw,
   Ticket,
+  Timer,
   User,
+  X,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import type {
+  Announcement,
   Employee,
   backendInterface as FullBackendInterface,
   Ticket as TicketType,
+  TimesheetEntry,
 } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { useFileUpload } from "../hooks/useFileUpload";
 
-type Section = "tickets" | "change-password" | "profile";
+type Section = "tickets" | "timesheet" | "change-password" | "profile";
 
 function nsToString(ns: bigint | null | undefined): string {
   if (!ns && ns !== BigInt(0)) return "-";
@@ -73,7 +79,7 @@ const exportCSV = (headers: string[], rows: string[][], filename: string) => {
 export default function SupportPortalPage() {
   const { actor: _actor } = useActor();
   const actor = _actor as unknown as FullBackendInterface | null;
-  const { uploadFile, getFileUrl, ready: storageReady } = useFileUpload();
+  const { getFileUrl } = useFileUpload();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loginId, setLoginId] = useState("");
   const [loginPass, setLoginPass] = useState("");
@@ -99,10 +105,39 @@ export default function SupportPortalPage() {
   const [confirmPass, setConfirmPass] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
 
-  // Profile photo state
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  // Timesheet state
+  const [todayEntry, setTodayEntry] = useState<
+    TimesheetEntry | null | undefined
+  >(undefined);
+  const [timesheetLoading, setTimesheetLoading] = useState(false);
+
+  // Announcements / notifications
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [announcementMediaUrls, setAnnouncementMediaUrls] = useState<
+    Record<string, string>
+  >({});
+
+  const today = new Date().toISOString().split("T")[0];
+
+  async function loadAnnouncements() {
+    if (!actor) return;
+    try {
+      const list = await actor.getAllAnnouncements();
+      setAnnouncements(list);
+      for (const a of list) {
+        if (a.mediaFileId && a.mediaType !== "none") {
+          getFileUrl(a.mediaFileId)
+            .then((url) =>
+              setAnnouncementMediaUrls((prev) => ({ ...prev, [a.id]: url })),
+            )
+            .catch(() => {});
+        }
+      }
+    } catch {
+      // silently fail
+    }
+  }
 
   async function handleLogin() {
     if (!actor) return;
@@ -117,11 +152,8 @@ export default function SupportPortalPage() {
       } else {
         setEmployee(result);
         loadTickets();
-        if (result.profilePhotoFileId) {
-          getFileUrl(result.profilePhotoFileId)
-            .then(setPhotoUrl)
-            .catch(() => {});
-        }
+        loadTodayEntry(result.employeeId);
+        loadAnnouncements();
       }
     } catch {
       setLoginError("Login failed. Please try again.");
@@ -140,6 +172,47 @@ export default function SupportPortalPage() {
       setTickets([]);
     } finally {
       setTicketsLoading(false);
+    }
+  }
+
+  async function loadTodayEntry(empId: string) {
+    if (!actor) return;
+    setTimesheetLoading(true);
+    try {
+      const entry = await actor.getTodayTimesheetEntry(empId, today);
+      setTodayEntry(entry);
+    } catch {
+      setTodayEntry(null);
+    } finally {
+      setTimesheetLoading(false);
+    }
+  }
+
+  async function handleCheckIn() {
+    if (!actor || !employee) return;
+    setTimesheetLoading(true);
+    try {
+      const entry = await actor.checkIn(employee.employeeId, today);
+      setTodayEntry(entry);
+      toast.success("Checked in successfully!");
+    } catch {
+      toast.error("Check-in failed.");
+    } finally {
+      setTimesheetLoading(false);
+    }
+  }
+
+  async function handleCheckOut() {
+    if (!actor || !employee) return;
+    setTimesheetLoading(true);
+    try {
+      const entry = await actor.checkOut(employee.employeeId, today);
+      if (entry) setTodayEntry(entry);
+      toast.success("Checked out successfully!");
+    } catch {
+      toast.error("Check-out failed.");
+    } finally {
+      setTimesheetLoading(false);
     }
   }
 
@@ -200,24 +273,6 @@ export default function SupportPortalPage() {
     }
   }
 
-  async function handlePhotoUpload(file: File) {
-    if (!actor || !employee || !storageReady) return;
-    setPhotoUploading(true);
-    try {
-      const fileId = await uploadFile(file);
-      await actor.updateEmployeeProfilePhoto(employee.employeeId, fileId);
-      const url = await getFileUrl(fileId);
-      setPhotoUrl(url);
-      const updated = await actor.getEmployee(employee.employeeId);
-      if (updated) setEmployee(updated);
-      toast.success("Profile photo updated!");
-    } catch {
-      toast.error("Failed to upload photo.");
-    } finally {
-      setPhotoUploading(false);
-    }
-  }
-
   const filteredTickets = tickets.filter((t) => {
     if (!startDate && !endDate) return true;
     const created = new Date(Number(t.createdAt) / 1_000_000);
@@ -256,10 +311,10 @@ export default function SupportPortalPage() {
   if (!employee) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center"
+        className="min-h-screen flex items-center justify-center px-4"
         style={{ backgroundColor: "#f8faff" }}
       >
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md border border-gray-200">
+        <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 w-full max-w-md border border-gray-200">
           <div className="flex flex-col items-center mb-8">
             <img
               src="/assets/uploads/154-removebg-preview-019d343e-3b74-77fa-8c99-6fa4ec112249-1.png"
@@ -324,22 +379,41 @@ export default function SupportPortalPage() {
   // Dashboard
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f8faff" }}>
-      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm">
+      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <img
             src="/assets/uploads/154-removebg-preview-019d343e-3b74-77fa-8c99-6fa4ec112249-1.png"
             alt="SysTrans"
             className="h-8 w-auto object-contain"
           />
-          <span className="font-bold text-lg" style={{ color: "#000080" }}>
+          <span
+            className="font-bold text-base sm:text-lg"
+            style={{ color: "#000080" }}
+          >
             Support Portal
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <span className="hidden sm:block text-sm text-gray-600">
             {employee.firstName} {employee.lastName}{" "}
             <span className="text-gray-400">({employee.employeeId})</span>
           </span>
+          {/* Notification Bell */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowNotifications((v) => !v)}
+              className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+              data-ocid="support.notifications.button"
+            >
+              <Bell className="h-5 w-5" style={{ color: "#000080" }} />
+              {announcements.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  {announcements.length > 9 ? "9+" : announcements.length}
+                </span>
+              )}
+            </button>
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -347,22 +421,115 @@ export default function SupportPortalPage() {
               setEmployee(null);
               setLoginId("");
               setLoginPass("");
-              setPhotoUrl(null);
+              setAnnouncements([]);
+              setShowNotifications(false);
             }}
             data-ocid="support.logout.button"
           >
-            <LogOut className="h-4 w-4 mr-1" /> Logout
+            <LogOut className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Logout</span>
           </Button>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row gap-6">
+      {/* Notifications Panel Overlay */}
+      {showNotifications && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end"
+          data-ocid="support.notifications.panel"
+        >
+          <div
+            className="fixed inset-0 bg-black/20"
+            onClick={() => setShowNotifications(false)}
+            onKeyDown={(e) => e.key === "Escape" && setShowNotifications(false)}
+            role="button"
+            tabIndex={-1}
+            aria-label="Close notifications"
+          />
+          <div className="relative bg-white w-full max-w-sm h-full shadow-2xl flex flex-col overflow-hidden">
+            <div
+              className="flex items-center justify-between px-5 py-4 border-b"
+              style={{ backgroundColor: "#000080" }}
+            >
+              <h2 className="text-white font-bold text-lg">Announcements</h2>
+              <button
+                type="button"
+                onClick={() => setShowNotifications(false)}
+                className="text-white/80 hover:text-white"
+                data-ocid="support.notifications.close_button"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {announcements.length === 0 ? (
+                <p
+                  className="text-gray-500 text-sm text-center mt-8"
+                  data-ocid="support.notifications.empty_state"
+                >
+                  No announcements yet.
+                </p>
+              ) : (
+                announcements
+                  .slice()
+                  .sort((a, b) => Number(b.createdAt - a.createdAt))
+                  .map((ann) => (
+                    <div
+                      key={ann.id}
+                      className="bg-blue-50 border border-blue-100 rounded-lg p-4"
+                    >
+                      <h3
+                        className="font-semibold text-sm"
+                        style={{ color: "#000080" }}
+                      >
+                        {ann.title}
+                      </h3>
+                      <p className="text-xs text-gray-500 mb-1">
+                        {new Date(
+                          Number(ann.createdAt) / 1_000_000,
+                        ).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </p>
+                      <p className="text-sm text-gray-700 whitespace-pre-line">
+                        {ann.content}
+                      </p>
+                      {ann.mediaType === "image" &&
+                        announcementMediaUrls[ann.id] && (
+                          <img
+                            src={announcementMediaUrls[ann.id]}
+                            alt={ann.title}
+                            className="mt-2 rounded w-full object-cover max-h-48"
+                          />
+                        )}
+                      {ann.mediaType === "video" &&
+                        announcementMediaUrls[ann.id] && (
+                          <video
+                            src={announcementMediaUrls[ann.id]}
+                            controls
+                            className="mt-2 rounded w-full max-h-48"
+                          >
+                            <track kind="captions" />
+                          </video>
+                        )}
+                    </div>
+                  ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8 flex flex-col sm:flex-row gap-4 sm:gap-6">
         {/* Sidebar */}
         <aside className="sm:w-48 flex-shrink-0">
-          <nav className="flex sm:flex-col gap-2">
+          <nav className="flex sm:flex-col flex-wrap gap-1.5 sm:gap-2">
             {(
               [
                 { id: "tickets", label: "Tickets", icon: Ticket },
+                { id: "timesheet", label: "Timesheet", icon: Timer },
                 {
                   id: "change-password",
                   label: "Change Password",
@@ -376,26 +543,29 @@ export default function SupportPortalPage() {
                 key={id}
                 onClick={() => setSection(id)}
                 data-ocid={`support.${id}.tab`}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-colors text-left ${
                   section === id
                     ? "text-white"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
                 style={section === id ? { backgroundColor: "#000080" } : {}}
               >
-                <Icon className="h-4 w-4" />
-                {label}
+                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+                <span className="truncate">{label}</span>
               </button>
             ))}
           </nav>
         </aside>
 
-        <main className="flex-1">
+        <main className="flex-1 min-w-0">
           {/* Tickets section */}
           {section === "tickets" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold" style={{ color: "#000080" }}>
+                <h2
+                  className="text-lg sm:text-xl font-bold"
+                  style={{ color: "#000080" }}
+                >
                   All Tickets
                 </h2>
                 <Button
@@ -420,7 +590,7 @@ export default function SupportPortalPage() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-40 text-sm"
+                    className="w-36 sm:w-40 text-sm"
                     data-ocid="support.tickets.start_date.input"
                   />
                 </div>
@@ -430,7 +600,7 @@ export default function SupportPortalPage() {
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-40 text-sm"
+                    className="w-36 sm:w-40 text-sm"
                     data-ocid="support.tickets.end_date.input"
                   />
                 </div>
@@ -518,11 +688,93 @@ export default function SupportPortalPage() {
             </div>
           )}
 
+          {/* Timesheet section */}
+          {section === "timesheet" && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+              <h2
+                className="text-lg sm:text-xl font-bold mb-1"
+                style={{ color: "#000080" }}
+              >
+                Timesheet
+              </h2>
+              <p className="text-gray-500 text-sm mb-4 sm:mb-6">
+                Today:{" "}
+                {new Date().toLocaleDateString("en-IN", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
+              {timesheetLoading ? (
+                <div
+                  className="flex items-center gap-2 text-gray-500"
+                  data-ocid="support.timesheet.loading_state"
+                >
+                  <Loader2 className="h-5 w-5 animate-spin" /> Loading...
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    <div className="bg-blue-50 rounded-lg p-3 sm:p-4">
+                      <p className="text-xs text-gray-500 mb-1">
+                        Check-In Time
+                      </p>
+                      <p className="font-semibold text-gray-800 text-sm sm:text-base">
+                        {todayEntry?.checkInTime
+                          ? nsToString(todayEntry.checkInTime)
+                          : "-"}
+                      </p>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-3 sm:p-4">
+                      <p className="text-xs text-gray-500 mb-1">
+                        Check-Out Time
+                      </p>
+                      <p className="font-semibold text-gray-800 text-sm sm:text-base">
+                        {todayEntry?.checkOutTime
+                          ? nsToString(todayEntry.checkOutTime)
+                          : "-"}
+                      </p>
+                    </div>
+                  </div>
+                  {!todayEntry?.checkInTime && (
+                    <Button
+                      onClick={handleCheckIn}
+                      disabled={timesheetLoading}
+                      className="text-white font-semibold"
+                      style={{ backgroundColor: "#000080" }}
+                      data-ocid="support.checkin.button"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" /> Check In
+                    </Button>
+                  )}
+                  {todayEntry?.checkInTime && !todayEntry?.checkOutTime && (
+                    <Button
+                      onClick={handleCheckOut}
+                      disabled={timesheetLoading}
+                      variant="outline"
+                      className="font-semibold"
+                      style={{ borderColor: "#000080", color: "#000080" }}
+                      data-ocid="support.checkout.button"
+                    >
+                      <LogOut className="h-4 w-4 mr-2" /> Check Out
+                    </Button>
+                  )}
+                  {todayEntry?.checkInTime && todayEntry?.checkOutTime && (
+                    <p className="text-green-600 font-medium text-sm">
+                      ✓ Attendance recorded for today.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Change Password */}
           {section === "change-password" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2
-                className="text-xl font-bold mb-6"
+                className="text-lg sm:text-xl font-bold mb-4 sm:mb-6"
                 style={{ color: "#000080" }}
               >
                 Change Password
@@ -579,60 +831,27 @@ export default function SupportPortalPage() {
 
           {/* Profile */}
           {section === "profile" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2
-                className="text-xl font-bold mb-6"
+                className="text-lg sm:text-xl font-bold mb-4 sm:mb-6"
                 style={{ color: "#000080" }}
               >
                 My Profile
               </h2>
 
-              {/* Profile Photo */}
-              <div className="flex flex-col items-center mb-8">
+              {/* Initials Avatar */}
+              <div className="flex flex-col items-center mb-6">
                 <div
-                  className="relative w-20 h-20 rounded-full overflow-hidden border-4 mb-3"
-                  style={{ borderColor: "#000080" }}
+                  className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold border-4"
+                  style={{ backgroundColor: "#000080", borderColor: "#000080" }}
                 >
-                  {photoUrl ? (
-                    <img
-                      src={photoUrl}
-                      alt="Profile"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="w-full h-full flex items-center justify-center text-white text-2xl font-bold"
-                      style={{ backgroundColor: "#000080" }}
-                    >
-                      {employee.firstName?.[0]}
-                      {employee.lastName?.[0]}
-                    </div>
-                  )}
+                  {employee.firstName?.[0]}
+                  {employee.lastName?.[0]}
                 </div>
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handlePhotoUpload(file);
-                  }}
-                  data-ocid="support.profile.upload_button"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={photoUploading || !storageReady}
-                  style={{ borderColor: "#000080", color: "#000080" }}
-                  data-ocid="support.profile.photo_button"
-                >
-                  {photoUploading ? (
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  ) : null}
-                  {photoUploading ? "Uploading..." : "Upload Photo"}
-                </Button>
+                <p className="mt-2 text-sm font-semibold text-gray-700">
+                  {employee.firstName} {employee.lastName}
+                </p>
+                <p className="text-xs text-gray-500">{employee.employeeId}</p>
               </div>
 
               {/* Profile Details (read-only) */}
@@ -672,7 +891,7 @@ export default function SupportPortalPage() {
         open={!!viewTicket}
         onOpenChange={(o) => !o && setViewTicket(null)}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg w-[95vw] sm:w-full">
           <DialogHeader>
             <DialogTitle style={{ color: "#000080" }}>
               Ticket Details — {viewTicket?.ticketNumber}

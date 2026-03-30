@@ -1,30 +1,42 @@
-# SysTrans
+# SysTrans Technologies
 
 ## Current State
-Full-stack app with admin panel (/admin), employee portal (/employee), support portal (/support). Employee type lacks email, mobile, city, state, profilePhotoFileId fields. Timesheet admin view has no total-hours calculation. Admin tickets tab allows editing (should be view-only). No ticket export in admin or support portal. No Profile section in employee/support portals.
+- Full-stack site with admin panel, employee portal (/employee), support portal (/support)
+- Employee type has `profilePhotoFileId`; `updateEmployeeProfilePhoto` backend method exists
+- Employee portal has profile photo upload UI
+- Support portal has profile photo upload UI
+- Support portal has NO timesheet functionality
+- No notifications/announcements system
+- Admin, employee, support UIs have basic responsiveness
 
 ## Requested Changes (Diff)
 
 ### Add
-- Total hours worked column in admin Timesheets tab (calculated from checkIn/checkOut)
-- Ticket export with date range in admin panel
-- Ticket export with date range in support portal
-- Profile section in employee portal (read-only details + uploadable profile photo)
-- Profile section in support portal (same as employee)
-- email, mobile, city, state, profilePhotoFileId fields to Employee backend type
-- updateEmployeeProfilePhoto backend method
+- `Announcement` type in backend: id, title, content, mediaFileId (blob-storage), mediaType ("none"/"image"/"video"), createdAt
+- Backend methods: `createAnnouncement`, `getAllAnnouncements`, `deleteAnnouncement`
+- Admin panel: "Announcements" tab — create announcement with text + optional image/video upload, list/delete announcements
+- Employee portal: notification bell icon in header with unread count badge; clicking opens an announcements panel showing all announcements
+- Support portal: same notification bell as employee portal
+- Support portal: Timesheet tab (check-in/check-out, same as employee portal) — admin can view support staff timesheets in the Timesheets tab
 
 ### Modify
-- Admin tickets tab: remove edit capability (view-only dialog + export only)
-- Employee form in admin: add email, mobile, city, state fields; auto-fetch city/state from pincode via India Post API
-- Employee creation backend call: pass email, mobile, city, state, profilePhotoFileId
+- Remove `profilePhotoFileId` from public `Employee` type (keep in internal EmployeeExtra for stable compat, just don't expose)
+- Remove `updateEmployeeProfilePhoto` backend method
+- Remove profile photo upload UI from employee portal profile section
+- Remove profile photo upload UI from support portal profile section
+- Improve responsiveness of admin panel (mobile/tablet/desktop): sidebar/tab navigation collapses, tables scroll horizontally, forms stack on mobile
+- Improve responsiveness of employee portal: nav becomes hamburger on mobile, cards stack
+- Improve responsiveness of support portal: nav becomes hamburger on mobile, tables/cards responsive
 
 ### Remove
-- Admin tickets inline status/notes editing
+- Profile photo upload functionality in employee portal
+- Profile photo upload functionality in support portal
+- `updateEmployeeProfilePhoto` backend endpoint
 
 ## Implementation Plan
-1. Update backend main.mo: add fields to Employee type, add updateEmployeeProfilePhoto method
-2. Update backend.d.ts: add fields to Employee interface, add method signature
-3. Update AdminPage.tsx: add email/mobile/city/state to employee forms, pincode auto-fetch, total hours in timesheet, view-only tickets with date range export
-4. Update EmployeePortalPage.tsx: add Profile section
-5. Update SupportPortalPage.tsx: add Profile section, add ticket export with date range
+1. Update `main.mo`: remove `profilePhotoFileId` from public Employee type (keep EmployeeExtra internal), remove `updateEmployeeProfilePhoto`, add `Announcement` type + stable map + CRUD methods
+2. Update `backend.d.ts` to reflect new types (remove `profilePhotoFileId`, `updateEmployeeProfilePhoto`; add Announcement interface and methods)
+3. Update `declarations/backend.did.d.ts` and `backend.did.js` accordingly
+4. Update `EmployeePortalPage.tsx`: remove photo upload from profile section; add notification bell with count + announcements drawer/panel; improve mobile responsiveness
+5. Update `SupportPortalPage.tsx`: remove photo upload; add notification bell + announcements panel; add Timesheet tab with check-in/check-out; improve responsiveness
+6. Update `AdminPage.tsx`: add Announcements tab (create with text + image/video, list, delete); improve responsiveness of all tabs

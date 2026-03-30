@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Bell,
   CheckCircle,
   ClipboardList,
   KeyRound,
@@ -28,10 +29,12 @@ import {
   Ticket,
   Timer,
   User,
+  X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type {
+  Announcement,
   Employee,
   backendInterface as FullBackendInterface,
   Ticket as TicketType,
@@ -61,7 +64,7 @@ function statusColor(status: string): string {
 export default function EmployeePortalPage() {
   const { actor: _actor } = useActor();
   const actor = _actor as unknown as FullBackendInterface | null;
-  const { uploadFile, getFileUrl, ready: storageReady } = useFileUpload();
+  const { getFileUrl } = useFileUpload();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loginId, setLoginId] = useState("");
   const [loginPass, setLoginPass] = useState("");
@@ -88,12 +91,34 @@ export default function EmployeePortalPage() {
   const [myTickets, setMyTickets] = useState<TicketType[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
 
-  // Profile photo state
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  // Announcements / notifications
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [announcementMediaUrls, setAnnouncementMediaUrls] = useState<
+    Record<string, string>
+  >({});
 
   const today = new Date().toISOString().split("T")[0];
+
+  async function loadAnnouncements() {
+    if (!actor) return;
+    try {
+      const list = await actor.getAllAnnouncements();
+      setAnnouncements(list);
+      // preload media URLs
+      for (const a of list) {
+        if (a.mediaFileId && a.mediaType !== "none") {
+          getFileUrl(a.mediaFileId)
+            .then((url) =>
+              setAnnouncementMediaUrls((prev) => ({ ...prev, [a.id]: url })),
+            )
+            .catch(() => {});
+        }
+      }
+    } catch {
+      // silently fail
+    }
+  }
 
   async function handleLogin() {
     if (!actor) return;
@@ -105,11 +130,7 @@ export default function EmployeePortalPage() {
         setEmployee(result);
         loadTodayEntry(result.employeeId);
         loadMyTickets(result.employeeId);
-        if (result.profilePhotoFileId) {
-          getFileUrl(result.profilePhotoFileId)
-            .then(setPhotoUrl)
-            .catch(() => {});
-        }
+        loadAnnouncements();
       } else {
         setLoginError("Invalid credentials. Please try again.");
       }
@@ -230,33 +251,14 @@ export default function EmployeePortalPage() {
     }
   }
 
-  async function handlePhotoUpload(file: File) {
-    if (!actor || !employee || !storageReady) return;
-    setPhotoUploading(true);
-    try {
-      const fileId = await uploadFile(file);
-      await actor.updateEmployeeProfilePhoto(employee.employeeId, fileId);
-      const url = await getFileUrl(fileId);
-      setPhotoUrl(url);
-      // Refresh employee data
-      const updated = await actor.getEmployee(employee.employeeId);
-      if (updated) setEmployee(updated);
-      toast.success("Profile photo updated!");
-    } catch {
-      toast.error("Failed to upload photo.");
-    } finally {
-      setPhotoUploading(false);
-    }
-  }
-
   // Login screen
   if (!employee) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center"
+        className="min-h-screen flex items-center justify-center px-4"
         style={{ backgroundColor: "#f8faff" }}
       >
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md border border-gray-200">
+        <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 w-full max-w-md border border-gray-200">
           <div className="flex flex-col items-center mb-8">
             <img
               src="/assets/uploads/154-removebg-preview-019d343e-3b74-77fa-8c99-6fa4ec112249-1.png"
@@ -322,22 +324,41 @@ export default function EmployeePortalPage() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f8faff" }}>
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm">
+      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2">
           <img
             src="/assets/uploads/154-removebg-preview-019d343e-3b74-77fa-8c99-6fa4ec112249-1.png"
             alt="SysTrans"
             className="h-8 w-auto object-contain"
           />
-          <span className="font-bold text-lg" style={{ color: "#000080" }}>
+          <span
+            className="font-bold text-base sm:text-lg"
+            style={{ color: "#000080" }}
+          >
             Employee Portal
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <span className="hidden sm:block text-sm text-gray-600">
             {employee.firstName} {employee.lastName}{" "}
             <span className="text-gray-400">({employee.employeeId})</span>
           </span>
+          {/* Notification Bell */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowNotifications((v) => !v)}
+              className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
+              data-ocid="employee.notifications.button"
+            >
+              <Bell className="h-5 w-5" style={{ color: "#000080" }} />
+              {announcements.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  {announcements.length > 9 ? "9+" : announcements.length}
+                </span>
+              )}
+            </button>
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -345,19 +366,112 @@ export default function EmployeePortalPage() {
               setEmployee(null);
               setLoginId("");
               setLoginPass("");
-              setPhotoUrl(null);
+              setAnnouncements([]);
+              setShowNotifications(false);
             }}
             data-ocid="employee.logout.button"
           >
-            <LogOut className="h-4 w-4 mr-1" /> Logout
+            <LogOut className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Logout</span>
           </Button>
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row gap-6">
+      {/* Notifications Panel Overlay */}
+      {showNotifications && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end"
+          data-ocid="employee.notifications.panel"
+        >
+          <div
+            className="fixed inset-0 bg-black/20"
+            onClick={() => setShowNotifications(false)}
+            onKeyDown={(e) => e.key === "Escape" && setShowNotifications(false)}
+            role="button"
+            tabIndex={-1}
+            aria-label="Close notifications"
+          />
+          <div className="relative bg-white w-full max-w-sm h-full shadow-2xl flex flex-col overflow-hidden">
+            <div
+              className="flex items-center justify-between px-5 py-4 border-b"
+              style={{ backgroundColor: "#000080" }}
+            >
+              <h2 className="text-white font-bold text-lg">Announcements</h2>
+              <button
+                type="button"
+                onClick={() => setShowNotifications(false)}
+                className="text-white/80 hover:text-white"
+                data-ocid="employee.notifications.close_button"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {announcements.length === 0 ? (
+                <p
+                  className="text-gray-500 text-sm text-center mt-8"
+                  data-ocid="employee.notifications.empty_state"
+                >
+                  No announcements yet.
+                </p>
+              ) : (
+                announcements
+                  .slice()
+                  .sort((a, b) => Number(b.createdAt - a.createdAt))
+                  .map((ann) => (
+                    <div
+                      key={ann.id}
+                      className="bg-blue-50 border border-blue-100 rounded-lg p-4"
+                      data-ocid="employee.announcement.card"
+                    >
+                      <h3
+                        className="font-semibold text-sm"
+                        style={{ color: "#000080" }}
+                      >
+                        {ann.title}
+                      </h3>
+                      <p className="text-xs text-gray-500 mb-1">
+                        {new Date(
+                          Number(ann.createdAt) / 1_000_000,
+                        ).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </p>
+                      <p className="text-sm text-gray-700 whitespace-pre-line">
+                        {ann.content}
+                      </p>
+                      {ann.mediaType === "image" &&
+                        announcementMediaUrls[ann.id] && (
+                          <img
+                            src={announcementMediaUrls[ann.id]}
+                            alt={ann.title}
+                            className="mt-2 rounded w-full object-cover max-h-48"
+                          />
+                        )}
+                      {ann.mediaType === "video" &&
+                        announcementMediaUrls[ann.id] && (
+                          <video
+                            src={announcementMediaUrls[ann.id]}
+                            controls
+                            className="mt-2 rounded w-full max-h-48"
+                          >
+                            <track kind="captions" />
+                          </video>
+                        )}
+                    </div>
+                  ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8 flex flex-col sm:flex-row gap-4 sm:gap-6">
         {/* Sidebar */}
         <aside className="sm:w-48 flex-shrink-0">
-          <nav className="flex sm:flex-col gap-2">
+          <nav className="flex sm:flex-col flex-wrap gap-1.5 sm:gap-2">
             {(
               [
                 { id: "timesheet", label: "Timesheet", icon: Timer },
@@ -376,32 +490,32 @@ export default function EmployeePortalPage() {
                 key={id}
                 onClick={() => setSection(id)}
                 data-ocid={`employee.${id}.tab`}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-colors text-left ${
                   section === id
                     ? "text-white"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
                 style={section === id ? { backgroundColor: "#000080" } : {}}
               >
-                <Icon className="h-4 w-4" />
-                {label}
+                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+                <span className="truncate">{label}</span>
               </button>
             ))}
           </nav>
         </aside>
 
         {/* Content */}
-        <main className="flex-1">
+        <main className="flex-1 min-w-0">
           {/* Timesheet */}
           {section === "timesheet" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2
-                className="text-xl font-bold mb-1"
+                className="text-lg sm:text-xl font-bold mb-1"
                 style={{ color: "#000080" }}
               >
                 Timesheet
               </h2>
-              <p className="text-gray-500 text-sm mb-6">
+              <p className="text-gray-500 text-sm mb-4 sm:mb-6">
                 Today:{" "}
                 {new Date().toLocaleDateString("en-IN", {
                   weekday: "long",
@@ -419,22 +533,22 @@ export default function EmployeePortalPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-blue-50 rounded-lg p-4">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    <div className="bg-blue-50 rounded-lg p-3 sm:p-4">
                       <p className="text-xs text-gray-500 mb-1">
                         Check-In Time
                       </p>
-                      <p className="font-semibold text-gray-800">
+                      <p className="font-semibold text-gray-800 text-sm sm:text-base">
                         {todayEntry?.checkInTime
                           ? nsToString(todayEntry.checkInTime)
                           : "-"}
                       </p>
                     </div>
-                    <div className="bg-blue-50 rounded-lg p-4">
+                    <div className="bg-blue-50 rounded-lg p-3 sm:p-4">
                       <p className="text-xs text-gray-500 mb-1">
                         Check-Out Time
                       </p>
-                      <p className="font-semibold text-gray-800">
+                      <p className="font-semibold text-gray-800 text-sm sm:text-base">
                         {todayEntry?.checkOutTime
                           ? nsToString(todayEntry.checkOutTime)
                           : "-"}
@@ -457,7 +571,7 @@ export default function EmployeePortalPage() {
                       onClick={handleCheckOut}
                       disabled={timesheetLoading}
                       variant="outline"
-                      className="border-navy font-semibold"
+                      className="font-semibold"
                       style={{ borderColor: "#000080", color: "#000080" }}
                       data-ocid="employee.checkout.button"
                     >
@@ -476,9 +590,9 @@ export default function EmployeePortalPage() {
 
           {/* Change Password */}
           {section === "change-password" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2
-                className="text-xl font-bold mb-6"
+                className="text-lg sm:text-xl font-bold mb-4 sm:mb-6"
                 style={{ color: "#000080" }}
               >
                 Change Password
@@ -535,9 +649,9 @@ export default function EmployeePortalPage() {
 
           {/* Raise Ticket */}
           {section === "raise-ticket" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2
-                className="text-xl font-bold mb-6"
+                className="text-lg sm:text-xl font-bold mb-4 sm:mb-6"
                 style={{ color: "#000080" }}
               >
                 Raise a Ticket
@@ -591,9 +705,12 @@ export default function EmployeePortalPage() {
 
           {/* My Tickets */}
           {section === "my-tickets" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold" style={{ color: "#000080" }}>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <h2
+                  className="text-lg sm:text-xl font-bold"
+                  style={{ color: "#000080" }}
+                >
                   My Tickets
                 </h2>
                 <Button
@@ -673,60 +790,27 @@ export default function EmployeePortalPage() {
 
           {/* Profile */}
           {section === "profile" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2
-                className="text-xl font-bold mb-6"
+                className="text-lg sm:text-xl font-bold mb-4 sm:mb-6"
                 style={{ color: "#000080" }}
               >
                 My Profile
               </h2>
 
-              {/* Profile Photo */}
-              <div className="flex flex-col items-center mb-8">
+              {/* Initials Avatar */}
+              <div className="flex flex-col items-center mb-6">
                 <div
-                  className="relative w-20 h-20 rounded-full overflow-hidden border-4 mb-3"
-                  style={{ borderColor: "#000080" }}
+                  className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold border-4"
+                  style={{ backgroundColor: "#000080", borderColor: "#000080" }}
                 >
-                  {photoUrl ? (
-                    <img
-                      src={photoUrl}
-                      alt="Profile"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="w-full h-full flex items-center justify-center text-white text-2xl font-bold"
-                      style={{ backgroundColor: "#000080" }}
-                    >
-                      {employee.firstName?.[0]}
-                      {employee.lastName?.[0]}
-                    </div>
-                  )}
+                  {employee.firstName?.[0]}
+                  {employee.lastName?.[0]}
                 </div>
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handlePhotoUpload(file);
-                  }}
-                  data-ocid="employee.profile.upload_button"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={photoUploading || !storageReady}
-                  style={{ borderColor: "#000080", color: "#000080" }}
-                  data-ocid="employee.profile.photo_button"
-                >
-                  {photoUploading ? (
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  ) : null}
-                  {photoUploading ? "Uploading..." : "Upload Photo"}
-                </Button>
+                <p className="mt-2 text-sm font-semibold text-gray-700">
+                  {employee.firstName} {employee.lastName}
+                </p>
+                <p className="text-xs text-gray-500">{employee.employeeId}</p>
               </div>
 
               {/* Profile Details (read-only) */}

@@ -2954,17 +2954,34 @@ function AnnouncementsTab() {
       toast.error("Title and content are required.");
       return;
     }
+    const hasMedia = mediaType !== "none" && mediaFile != null;
+    if (hasMedia && !storageReady) {
+      toast.error("Storage not ready. Please wait a moment and try again.");
+      return;
+    }
     setCreating(true);
     try {
       let fileId = "";
-      if (mediaType !== "none" && mediaFile) {
-        fileId = await uploadFile(mediaFile);
+      let effectiveMediaType = mediaType;
+      if (hasMedia && mediaFile) {
+        try {
+          fileId = await uploadFile(mediaFile);
+        } catch (uploadErr) {
+          console.error("Upload error:", uploadErr);
+          toast.error(
+            "Failed to upload media file. Creating announcement without media.",
+          );
+          effectiveMediaType = "none";
+          fileId = "";
+        }
+      } else if (mediaType !== "none" && !mediaFile) {
+        effectiveMediaType = "none";
       }
       await actor.createAnnouncement(
         title.trim(),
         content.trim(),
         fileId,
-        mediaType,
+        effectiveMediaType,
       );
       toast.success("Announcement created!");
       setTitle("");
@@ -2972,8 +2989,9 @@ function AnnouncementsTab() {
       setMediaType("none");
       setMediaFile(null);
       loadAnnouncements();
-    } catch {
-      toast.error("Failed to create announcement.");
+    } catch (e) {
+      console.error("Announcement creation error:", e);
+      toast.error("Failed to create announcement. Please try again.");
     } finally {
       setCreating(false);
     }

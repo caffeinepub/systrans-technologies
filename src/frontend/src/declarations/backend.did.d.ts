@@ -105,6 +105,22 @@ export interface TimesheetEntry {
   'employeeId' : string,
   'checkOutTime' : [] | [Time],
 }
+export interface LeaveRequest {
+  'id' : string,
+  'employeeId' : string,
+  'reason' : string,
+  'startDate' : string,
+  'endDate' : string,
+  'numberOfDays' : bigint,
+  'status' : string,
+  'requestedAt' : Time,
+  'approvedAt' : [] | [Time],
+}
+export interface LeaveBalance {
+  'employeeId' : string,
+  'balance' : bigint,
+  'lastCreditedMonth' : string,
+}
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -165,6 +181,12 @@ export interface _SERVICE {
   'getAllROINewLeads' : ActorMethod<[], Array<ROINewLead>>,
   'getAllTickets' : ActorMethod<[], Array<Ticket>>,
   'getAllTimesheets' : ActorMethod<[], Array<TimesheetEntry>>,
+  'getAllLeaveRequests' : ActorMethod<[], Array<LeaveRequest>>,
+  'getLeavesByEmployee' : ActorMethod<[string], Array<LeaveRequest>>,
+  'getLeaveBalance' : ActorMethod<[string], bigint>,
+  'initOrRefreshLeaveBalance' : ActorMethod<[string], LeaveBalance>,
+  'applyLeave' : ActorMethod<[string, string, string, string, bigint], LeaveRequest>,
+  'approveLeaveRequest' : ActorMethod<[string, string], boolean>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getEmployee' : ActorMethod<[string], [] | [Employee]>,

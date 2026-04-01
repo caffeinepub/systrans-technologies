@@ -46,6 +46,7 @@ import {
   Mail,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   Trash2,
 } from "lucide-react";
@@ -2908,6 +2909,230 @@ function AdminTicketsTab() {
   );
 }
 
+interface LeaveRequest {
+  id: string;
+  employeeId: string;
+  reason: string;
+  startDate: string;
+  endDate: string;
+  numberOfDays: bigint;
+  status: string;
+  requestedAt: bigint;
+  approvedAt: [] | [bigint];
+}
+
+interface BackendWithLeave extends FullBackendInterface {
+  getAllLeaveRequests(): Promise<LeaveRequest[]>;
+  approveLeaveRequest(leaveId: string, status: string): Promise<boolean>;
+}
+
+function AdminLeaveTab() {
+  const { actor: _actor } = useActor();
+  const actor = _actor as unknown as BackendWithLeave | null;
+  const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [employees, setEmployees] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  async function loadData() {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      const [leavesData, empsData] = await Promise.all([
+        (actor as unknown as BackendWithLeave).getAllLeaveRequests(),
+        actor.getAllEmployees(),
+      ]);
+      setLeaves(leavesData);
+      const empMap: Record<string, string> = {};
+      for (const e of empsData) {
+        empMap[e.employeeId] = `${e.firstName} ${e.lastName}`;
+      }
+      setEmployees(empMap);
+    } catch {
+      toast.error("Failed to load leave requests.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!actor) return;
+    (async () => {
+      setLoading(true);
+      try {
+        const [leavesData, empsData] = await Promise.all([
+          (actor as unknown as BackendWithLeave).getAllLeaveRequests(),
+          actor.getAllEmployees(),
+        ]);
+        setLeaves(leavesData);
+        const empMap: Record<string, string> = {};
+        for (const e of empsData) {
+          empMap[e.employeeId] = `${e.firstName} ${e.lastName}`;
+        }
+        setEmployees(empMap);
+      } catch {
+        toast.error("Failed to load leave requests.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actor]);
+
+  async function handleAction(leaveId: string, status: string) {
+    if (!actor) return;
+    setActionLoading(`${leaveId}${status}`);
+    try {
+      await actor.approveLeaveRequest(leaveId, status);
+      toast.success(`Leave ${status} successfully.`);
+      loadData();
+    } catch {
+      toast.error(`Failed to ${status} leave.`);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const statusBadge = (status: string) => {
+    const cls =
+      status === "approved"
+        ? "bg-green-100 text-green-800"
+        : status === "rejected"
+          ? "bg-red-100 text-red-800"
+          : status === "lop"
+            ? "bg-orange-100 text-orange-800"
+            : "bg-yellow-100 text-yellow-800";
+    const label =
+      status === "lop"
+        ? "LOP"
+        : status.charAt(0).toUpperCase() + status.slice(1);
+    return (
+      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>
+        {label}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold" style={{ color: "#000080" }}>
+          Leave Requests
+        </h2>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={loadData}
+          disabled={loading}
+          data-ocid="admin.leave.secondary_button"
+        >
+          <RefreshCw
+            className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`}
+          />
+          Refresh
+        </Button>
+      </div>
+      {loading ? (
+        <div
+          className="flex items-center gap-2 text-gray-500 py-8"
+          data-ocid="admin.leave.loading_state"
+        >
+          <Loader2 className="h-5 w-5 animate-spin" /> Loading...
+        </div>
+      ) : leaves.length === 0 ? (
+        <p
+          className="text-gray-500 py-8 text-center"
+          data-ocid="admin.leave.empty_state"
+        >
+          No leave requests found.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table data-ocid="admin.leave.table">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Leave ID</TableHead>
+                <TableHead>Start Date</TableHead>
+                <TableHead>End Date</TableHead>
+                <TableHead>Days</TableHead>
+                <TableHead>Reason</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Applied On</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {leaves.map((lr, idx) => (
+                <TableRow key={lr.id} data-ocid={`admin.leave.item.${idx + 1}`}>
+                  <TableCell>
+                    <div>
+                      <p className="font-medium text-sm">
+                        {employees[lr.employeeId] || lr.employeeId}
+                      </p>
+                      <p className="text-xs text-gray-500">{lr.employeeId}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {lr.id.slice(0, 8)}...
+                  </TableCell>
+                  <TableCell className="text-sm">{lr.startDate}</TableCell>
+                  <TableCell className="text-sm">{lr.endDate}</TableCell>
+                  <TableCell>{Number(lr.numberOfDays)}</TableCell>
+                  <TableCell className="max-w-40 truncate text-xs">
+                    {lr.reason}
+                  </TableCell>
+                  <TableCell>{statusBadge(lr.status)}</TableCell>
+                  <TableCell className="text-xs">
+                    {new Date(
+                      Number(lr.requestedAt) / 1_000_000,
+                    ).toLocaleDateString("en-IN")}
+                  </TableCell>
+                  <TableCell>
+                    {lr.status === "pending" ? (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
+                          disabled={actionLoading === `${lr.id}approved`}
+                          onClick={() => handleAction(lr.id, "approved")}
+                          data-ocid={`admin.leave.confirm_button.${idx + 1}`}
+                        >
+                          {actionLoading === `${lr.id}approved` ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            "Approve"
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-7 text-xs"
+                          disabled={actionLoading === `${lr.id}rejected`}
+                          onClick={() => handleAction(lr.id, "rejected")}
+                          data-ocid={`admin.leave.delete_button.${idx + 1}`}
+                        >
+                          {actionLoading === `${lr.id}rejected` ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            "Reject"
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      statusBadge(lr.status)
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AnnouncementsTab() {
   const { actor: _aActor } = useActor();
   const actor = _aActor as unknown as FullBackendInterface | null;
@@ -2977,12 +3202,21 @@ function AnnouncementsTab() {
       } else if (mediaType !== "none" && !mediaFile) {
         effectiveMediaType = "none";
       }
+      console.log("[Announcement] Calling createAnnouncement with:", {
+        title: title.trim(),
+        contentLength: content.trim().length,
+        fileId,
+        effectiveMediaType,
+        actorHasMethod: typeof (actor as unknown as Record<string, unknown>)
+          .createAnnouncement,
+      });
       await actor.createAnnouncement(
         title.trim(),
         content.trim(),
         fileId,
         effectiveMediaType,
       );
+      console.log("[Announcement] createAnnouncement succeeded");
       toast.success("Announcement created!");
       setTitle("");
       setContent("");
@@ -2991,7 +3225,8 @@ function AnnouncementsTab() {
       loadAnnouncements();
     } catch (e) {
       console.error("Announcement creation error:", e);
-      toast.error("Failed to create announcement. Please try again.");
+      const errMsg = e instanceof Error ? e.message : String(e);
+      toast.error(`Failed to create announcement: ${errMsg.slice(0, 120)}`);
     } finally {
       setCreating(false);
     }
@@ -3418,6 +3653,13 @@ export default function AdminPage() {
             >
               Announcements
             </TabsTrigger>
+            <TabsTrigger
+              value="leave-requests"
+              className="data-[state=active]:bg-accent/20 data-[state=active]:text-accent"
+              data-ocid="admin.leave_requests.tab"
+            >
+              Leave Requests
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="jobs">
@@ -3452,6 +3694,9 @@ export default function AdminPage() {
           </TabsContent>
           <TabsContent value="announcements">
             <AnnouncementsTab />
+          </TabsContent>
+          <TabsContent value="leave-requests">
+            <AdminLeaveTab />
           </TabsContent>
         </Tabs>
       </main>

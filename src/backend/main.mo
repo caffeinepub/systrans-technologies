@@ -106,7 +106,6 @@ actor {
     name : Text;
   };
 
-  // Public Employee type — no profilePhotoFileId
   public type Employee = {
     employeeId : Text;
     passwordHash : Text;
@@ -156,6 +155,24 @@ actor {
     createdAt : Time.Time;
   };
 
+  public type LeaveRequest = {
+    id : Text;
+    employeeId : Text;
+    reason : Text;
+    startDate : Text;
+    endDate : Text;
+    numberOfDays : Nat;
+    status : Text; // pending | approved | rejected | lop
+    requestedAt : Time.Time;
+    approvedAt : ?Time.Time;
+  };
+
+  public type LeaveBalance = {
+    employeeId : Text;
+    balance : Nat;
+    lastCreditedMonth : Text; // "YYYY-MM"
+  };
+
   // Internal base type for stable upgrade compat
   type EmployeeBase = {
     employeeId : Text;
@@ -179,29 +196,32 @@ actor {
     mobile : Text;
     city : Text;
     state : Text;
-    profilePhotoFileId : Text; // kept for stable compat, not exposed
+    profilePhotoFileId : Text;
   };
 
   // ── Stable state ──────────────────────────────────────────────────────────
-  stable var nextJobId = 0;
-  stable var nextTemplateId = 0;
-  stable var nextEmployeeId = 0;
-  stable var nextTimesheetId = 0;
-  stable var nextTicketId = 0;
-  stable var nextAnnouncementId = 0;
-  stable let jobPositions = Map.empty<Nat, JobPosition>();
-  stable var contactFormSubmissions = List.empty<ContactFormSubmission>();
-  stable var roiLeads = List.empty<ROINewLead>();
-  stable var jobApplications = List.empty<JobApplication>();
-  stable var mailConfig : ?MailConfig = null;
-  stable let customMailTemplates = Map.empty<Nat, CustomMailTemplate>();
-  stable let userProfiles = Map.empty<Principal, UserProfile>();
-  stable let employees = Map.empty<Text, EmployeeBase>();
-  stable let employeeExtras = Map.empty<Text, EmployeeExtra>();
-  stable let timesheetEntries = Map.empty<Text, TimesheetEntry>();
-  stable let tickets = Map.empty<Text, Ticket>();
-  stable let announcements = Map.empty<Text, Announcement>();
-  stable var adminPasswordHash : Text = "Kumaresh@436314";
+  var nextJobId = 0;
+  var nextTemplateId = 0;
+  var nextEmployeeId = 0;
+  var nextTimesheetId = 0;
+  var nextTicketId = 0;
+  var nextAnnouncementId = 0;
+  var nextLeaveId = 0;
+  let jobPositions = Map.empty<Nat, JobPosition>();
+  var contactFormSubmissions = List.empty<ContactFormSubmission>();
+  var roiLeads = List.empty<ROINewLead>();
+  var jobApplications = List.empty<JobApplication>();
+  var mailConfig : ?MailConfig = null;
+  let customMailTemplates = Map.empty<Nat, CustomMailTemplate>();
+  let userProfiles = Map.empty<Principal, UserProfile>();
+  let employees = Map.empty<Text, EmployeeBase>();
+  let employeeExtras = Map.empty<Text, EmployeeExtra>();
+  let timesheetEntries = Map.empty<Text, TimesheetEntry>();
+  let tickets = Map.empty<Text, Ticket>();
+  let announcements = Map.empty<Text, Announcement>();
+  let leaveRequests = Map.empty<Text, LeaveRequest>();
+  let leaveBalances = Map.empty<Text, LeaveBalance>();
+  var adminPasswordHash : Text = "Kumaresh@436314";
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   func formatEmployeeId(n : Nat) : Text {
@@ -220,6 +240,26 @@ actor {
 
   func formatTimesheetId(n : Nat) : Text {
     "TS" # n.toText();
+  };
+
+  func formatLeaveId(n : Nat) : Text {
+    let s = n.toText();
+    if (s.size() == 1) { "LV00" # s }
+    else if (s.size() == 2) { "LV0" # s }
+    else { "LV" # s };
+  };
+
+  // Extract the first `n` characters of a Text value
+  func textPrefix(t : Text, n : Nat) : Text {
+    var result = "";
+    var i = 0;
+    for (c in t.chars()) {
+      if (i < n) {
+        result #= Text.fromChar(c);
+        i += 1;
+      };
+    };
+    result;
   };
 
   func combineEmployee(base : EmployeeBase, extra : EmployeeExtra) : Employee {
@@ -256,6 +296,64 @@ actor {
         ?combineEmployee(base, extra);
       };
     };
+  };
+
+  // Get or initialize leave balance, auto-crediting 2 leaves for new month
+  func getOrInitBalance(employeeId : Text, currentMonth : Text) : LeaveBalance {
+    switch (leaveBalances.get(employeeId)) {
+      case null {
+        let bal : LeaveBalance = {
+          employeeId;
+          balance = 2;
+          lastCreditedMonth = currentMonth;
+        };
+        leaveBalances.add(employeeId, bal);
+        bal;
+      };
+      case (?existing) {
+        if (existing.lastCreditedMonth != currentMonth) {
+          let bal : LeaveBalance = {
+            employeeId;
+            balance = existing.balance + 2;
+            lastCreditedMonth = currentMonth;
+          };
+          leaveBalances.add(employeeId, bal);
+          bal;
+        } else {
+          existing;
+        };
+      };
+    };
+  };
+
+  func getCurrentMonth() : Text {
+    let now = Time.now();
+    let seconds = now / 1_000_000_000;
+    let days = seconds / 86400;
+    var d = days;
+    var y : Nat = 1970;
+    while (true) {
+      let diy : Nat = if (y % 4 == 0 and (y % 100 != 0 or y % 400 == 0)) { 366 } else { 365 };
+      if (d < diy) {
+        let monthDays : [Nat] = if (diy == 366) {
+          [31,29,31,30,31,30,31,31,30,31,30,31]
+        } else {
+          [31,28,31,30,31,30,31,31,30,31,30,31]
+        };
+        var m : Nat = 0;
+        var dd = d;
+        while (m < 12 and dd >= monthDays[m]) {
+          dd -= monthDays[m];
+          m += 1;
+        };
+        let monthNum = m + 1;
+        let mm = if (monthNum < 10) { "0" # monthNum.toText() } else { monthNum.toText() };
+        return y.toText() # "-" # mm;
+      };
+      d -= diy;
+      y += 1;
+    };
+    "2025-01";
   };
 
   // ── User Profile ──────────────────────────────────────────────────────────
@@ -571,18 +669,18 @@ actor {
   };
 
   // ── Announcements ─────────────────────────────────────────────────────────
-  public shared func createAnnouncement(title : Text, content : Text, mediaFileId : Text, mediaType : Text) : async Announcement {
+  public shared func createAnnouncement(annTitle : Text, annContent : Text, annMediaFileId : Text, annMediaType : Text) : async Announcement {
     nextAnnouncementId += 1;
-    let id = nextAnnouncementId.toText();
+    let annId = nextAnnouncementId.toText();
     let ann : Announcement = {
-      id;
-      title;
-      content;
-      mediaFileId;
-      mediaType;
+      id = annId;
+      title = annTitle;
+      content = annContent;
+      mediaFileId = annMediaFileId;
+      mediaType = annMediaType;
       createdAt = Time.now();
     };
-    announcements.add(id, ann);
+    announcements.add(annId, ann);
     ann;
   };
 
@@ -595,6 +693,93 @@ actor {
       case null { false };
       case (?_) {
         announcements.remove(id);
+        true;
+      };
+    };
+  };
+
+  // ── Leave Management ──────────────────────────────────────────────────────
+  public shared func applyLeave(employeeId : Text, reason : Text, startDate : Text, endDate : Text, numberOfDays : Nat) : async LeaveRequest {
+    let currentMonth = getCurrentMonth();
+    let bal = getOrInitBalance(employeeId, currentMonth);
+
+    // Count non-LOP leaves applied this month using textPrefix helper
+    let thisMonthLeaves = leaveRequests.values().toArray().filter(
+      func(lr : LeaveRequest) : Bool {
+        lr.employeeId == employeeId and
+        lr.status != "lop" and lr.status != "rejected" and
+        lr.startDate.size() >= 7 and
+        textPrefix(lr.startDate, 7) == currentMonth
+      }
+    );
+    let monthlyCount = thisMonthLeaves.size();
+
+    let status : Text = if (numberOfDays > bal.balance or monthlyCount >= 2) {
+      "lop"
+    } else {
+      "pending"
+    };
+
+    nextLeaveId += 1;
+    let leaveId = formatLeaveId(nextLeaveId);
+    let req : LeaveRequest = {
+      id = leaveId;
+      employeeId;
+      reason;
+      startDate;
+      endDate;
+      numberOfDays;
+      status;
+      requestedAt = Time.now();
+      approvedAt = null;
+    };
+    leaveRequests.add(leaveId, req);
+    req;
+  };
+
+  public query func getLeaveBalance(employeeId : Text) : async Nat {
+    switch (leaveBalances.get(employeeId)) {
+      case null { 0 };
+      case (?bal) { bal.balance };
+    };
+  };
+
+  public shared func initOrRefreshLeaveBalance(employeeId : Text) : async LeaveBalance {
+    let currentMonth = getCurrentMonth();
+    getOrInitBalance(employeeId, currentMonth);
+  };
+
+  public query func getLeavesByEmployee(employeeId : Text) : async [LeaveRequest] {
+    leaveRequests.values().toArray().filter(
+      func(lr : LeaveRequest) : Bool { lr.employeeId == employeeId }
+    );
+  };
+
+  public query func getAllLeaveRequests() : async [LeaveRequest] {
+    leaveRequests.values().toArray();
+  };
+
+  public shared func approveLeaveRequest(leaveId : Text, newStatus : Text) : async Bool {
+    switch (leaveRequests.get(leaveId)) {
+      case null { false };
+      case (?req) {
+        if (req.status == "lop") { return false };
+        let approvedAt : ?Time.Time = if (newStatus == "approved") { ?Time.now() } else { null };
+        if (newStatus == "approved") {
+          switch (leaveBalances.get(req.employeeId)) {
+            case null {};
+            case (?bal) {
+              // Safe subtraction: guard ensures balance >= numberOfDays
+              let newBal : Nat = if (bal.balance > req.numberOfDays) {
+                bal.balance - req.numberOfDays
+              } else {
+                0
+              };
+              leaveBalances.add(req.employeeId, { bal with balance = newBal });
+            };
+          };
+        };
+        leaveRequests.add(leaveId, { req with status = newStatus; approvedAt });
         true;
       };
     };

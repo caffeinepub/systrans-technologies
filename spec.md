@@ -1,42 +1,44 @@
 # SysTrans Technologies
 
 ## Current State
-- Full-stack site with admin panel, employee portal (/employee), support portal (/support)
-- Employee type has `profilePhotoFileId`; `updateEmployeeProfilePhoto` backend method exists
-- Employee portal has profile photo upload UI
-- Support portal has profile photo upload UI
-- Support portal has NO timesheet functionality
-- No notifications/announcements system
-- Admin, employee, support UIs have basic responsiveness
+Full-stack app with employee portal (/employee), support portal (/support), and admin panel (/admin). Backend has employees, timesheets, tickets, and announcements. No leave management exists.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `Announcement` type in backend: id, title, content, mediaFileId (blob-storage), mediaType ("none"/"image"/"video"), createdAt
-- Backend methods: `createAnnouncement`, `getAllAnnouncements`, `deleteAnnouncement`
-- Admin panel: "Announcements" tab — create announcement with text + optional image/video upload, list/delete announcements
-- Employee portal: notification bell icon in header with unread count badge; clicking opens an announcements panel showing all announcements
-- Support portal: same notification bell as employee portal
-- Support portal: Timesheet tab (check-in/check-out, same as employee portal) — admin can view support staff timesheets in the Timesheets tab
+- `LeaveRequest` type: id, employeeId, reason, startDate, endDate, numberOfDays, status (pending/approved/rejected/lop), requestedAt, approvedAt
+- `LeaveBalance` type: employeeId, balance (Nat), lastCreditedMonth (Text) — used to track when the monthly 2 leaves were last credited
+- Backend functions:
+  - `applyLeave(employeeId, reason, startDate, endDate, numberOfDays)` → LeaveRequest. If numberOfDays > balance, status = "lop", else status = "pending"
+  - `getLeavesByEmployee(employeeId)` → [LeaveRequest]
+  - `getAllLeaveRequests()` → [LeaveRequest] (admin)
+  - `approveLeaveRequest(id, status)` → Bool (admin, status = approved or rejected)
+  - `getLeaveBalance(employeeId)` → Nat — also auto-credits 2 leaves if current month != lastCreditedMonth
+  - Max 2 leave applications per calendar month (excluding LOP)
+- "Apply Leave" tab in Employee Portal:
+  - Shows leave balance prominently
+  - Form: reason (text), start date, end date → auto-calculates number of days
+  - If days > balance: warns user it will be marked as LOP, still allows submission
+  - Shows history table of all leave requests with status badges
+- "Apply Leave" tab in Support Portal: same as employee portal
+- Admin Panel "Leave Requests" tab:
+  - Table of all leave requests with employee name, dates, reason, days, status
+  - Approve / Reject buttons for pending requests
+  - LOP requests are shown as informational (no approval needed, already marked)
 
 ### Modify
-- Remove `profilePhotoFileId` from public `Employee` type (keep in internal EmployeeExtra for stable compat, just don't expose)
-- Remove `updateEmployeeProfilePhoto` backend method
-- Remove profile photo upload UI from employee portal profile section
-- Remove profile photo upload UI from support portal profile section
-- Improve responsiveness of admin panel (mobile/tablet/desktop): sidebar/tab navigation collapses, tables scroll horizontally, forms stack on mobile
-- Improve responsiveness of employee portal: nav becomes hamburger on mobile, cards stack
-- Improve responsiveness of support portal: nav becomes hamburger on mobile, tables/cards responsive
+- `backend/main.mo` — add LeaveRequest and LeaveBalance types, stable maps, and all leave functions
+- `backend.did.d.ts` — add new types and method signatures
+- `EmployeePortalPage.tsx` — add Apply Leave tab
+- `SupportPortalPage.tsx` — add Apply Leave tab
+- `AdminPage.tsx` — add Leave Requests tab
 
 ### Remove
-- Profile photo upload functionality in employee portal
-- Profile photo upload functionality in support portal
-- `updateEmployeeProfilePhoto` backend endpoint
+- Nothing removed
 
 ## Implementation Plan
-1. Update `main.mo`: remove `profilePhotoFileId` from public Employee type (keep EmployeeExtra internal), remove `updateEmployeeProfilePhoto`, add `Announcement` type + stable map + CRUD methods
-2. Update `backend.d.ts` to reflect new types (remove `profilePhotoFileId`, `updateEmployeeProfilePhoto`; add Announcement interface and methods)
-3. Update `declarations/backend.did.d.ts` and `backend.did.js` accordingly
-4. Update `EmployeePortalPage.tsx`: remove photo upload from profile section; add notification bell with count + announcements drawer/panel; improve mobile responsiveness
-5. Update `SupportPortalPage.tsx`: remove photo upload; add notification bell + announcements panel; add Timesheet tab with check-in/check-out; improve responsiveness
-6. Update `AdminPage.tsx`: add Announcements tab (create with text + image/video, list, delete); improve responsiveness of all tabs
+1. Update main.mo with LeaveRequest type, LeaveBalance type, stable maps (nextLeaveId, leaveRequests, leaveBalances), and all 6 leave functions
+2. Update backend.did.d.ts with new types and methods
+3. Update EmployeePortalPage.tsx with Apply Leave tab (balance display, apply form, history)
+4. Update SupportPortalPage.tsx with Apply Leave tab (same as employee)
+5. Update AdminPage.tsx with Leave Requests tab (view all, approve/reject)

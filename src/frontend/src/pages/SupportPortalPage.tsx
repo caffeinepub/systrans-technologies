@@ -26,6 +26,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   Bell,
+  CalendarDays,
   CheckCircle,
   Download,
   Eye,
@@ -50,7 +51,37 @@ import type {
 import { useActor } from "../hooks/useActor";
 import { useFileUpload } from "../hooks/useFileUpload";
 
-type Section = "tickets" | "timesheet" | "change-password" | "profile";
+interface LeaveRequest {
+  id: string;
+  employeeId: string;
+  reason: string;
+  startDate: string;
+  endDate: string;
+  numberOfDays: bigint;
+  status: string;
+  requestedAt: bigint;
+  approvedAt: [] | [bigint];
+}
+
+interface BackendWithLeave extends FullBackendInterface {
+  initOrRefreshLeaveBalance(employeeId: string): Promise<bigint>;
+  getLeaveBalance(employeeId: string): Promise<bigint>;
+  applyLeave(
+    employeeId: string,
+    reason: string,
+    startDate: string,
+    endDate: string,
+    numberOfDays: bigint,
+  ): Promise<LeaveRequest>;
+  getLeavesByEmployee(employeeId: string): Promise<LeaveRequest[]>;
+}
+
+type Section =
+  | "tickets"
+  | "timesheet"
+  | "change-password"
+  | "apply-leave"
+  | "profile";
 
 function nsToString(ns: bigint | null | undefined): string {
   if (!ns && ns !== BigInt(0)) return "-";
@@ -78,7 +109,7 @@ const exportCSV = (headers: string[], rows: string[][], filename: string) => {
 
 export default function SupportPortalPage() {
   const { actor: _actor } = useActor();
-  const actor = _actor as unknown as FullBackendInterface | null;
+  const actor = _actor as unknown as BackendWithLeave | null;
   const { getFileUrl } = useFileUpload();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loginId, setLoginId] = useState("");
@@ -120,6 +151,14 @@ export default function SupportPortalPage() {
 
   const today = new Date().toISOString().split("T")[0];
 
+  // Leave state
+  const [leaveBalance, setLeaveBalance] = useState<bigint>(BigInt(0));
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [leaveStartDate, setLeaveStartDate] = useState("");
+  const [leaveEndDate, setLeaveEndDate] = useState("");
+  const [leaveReason, setLeaveReason] = useState("");
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
+
   async function loadAnnouncements() {
     if (!actor) return;
     try {
@@ -139,6 +178,56 @@ export default function SupportPortalPage() {
     }
   }
 
+  async function loadLeaveData(empId: string) {
+    if (!actor) return;
+    try {
+      const [bal, reqs] = await Promise.all([
+        actor.initOrRefreshLeaveBalance(empId),
+        actor.getLeavesByEmployee(empId),
+      ]);
+      setLeaveBalance(bal);
+      setLeaveRequests(reqs);
+    } catch {
+      // silently fail
+    }
+  }
+
+  async function handleApplyLeave() {
+    if (!actor || !employee) return;
+    if (!leaveStartDate || !leaveEndDate || !leaveReason.trim()) {
+      toast.error("Please fill in all fields.");
+      return;
+    }
+    const start = new Date(leaveStartDate);
+    const end = new Date(leaveEndDate);
+    if (end < start) {
+      toast.error("End date must be after start date.");
+      return;
+    }
+    const days = BigInt(
+      Math.round((end.getTime() - start.getTime()) / 86400000) + 1,
+    );
+    setLeaveSubmitting(true);
+    try {
+      await actor.applyLeave(
+        employee.employeeId,
+        leaveReason.trim(),
+        leaveStartDate,
+        leaveEndDate,
+        days,
+      );
+      toast.success("Leave application submitted!");
+      setLeaveStartDate("");
+      setLeaveEndDate("");
+      setLeaveReason("");
+      loadLeaveData(employee.employeeId);
+    } catch {
+      toast.error("Failed to submit leave application.");
+    } finally {
+      setLeaveSubmitting(false);
+    }
+  }
+
   async function handleLogin() {
     if (!actor) return;
     setLoginLoading(true);
@@ -154,6 +243,7 @@ export default function SupportPortalPage() {
         loadTickets();
         loadTodayEntry(result.employeeId);
         loadAnnouncements();
+        loadLeaveData(result.employeeId);
       }
     } catch {
       setLoginError("Login failed. Please try again.");
@@ -535,6 +625,7 @@ export default function SupportPortalPage() {
                   label: "Change Password",
                   icon: KeyRound,
                 },
+                { id: "apply-leave", label: "Apply Leave", icon: CalendarDays },
                 { id: "profile", label: "Profile", icon: User },
               ] as const
             ).map(({ id, label, icon: Icon }) => (
@@ -830,6 +921,209 @@ export default function SupportPortalPage() {
           )}
 
           {/* Profile */}
+          {/* Apply Leave */}
+          {section === "apply-leave" && (
+            <div className="space-y-4 sm:space-y-6">
+              <div
+                className="rounded-xl p-4 sm:p-6 text-white flex items-center gap-4"
+                style={{ backgroundColor: "#000080" }}
+              >
+                <CalendarDays className="h-10 w-10 opacity-80 flex-shrink-0" />
+                <div>
+                  <p className="text-sm opacity-80">Available Leave Balance</p>
+                  <p className="text-3xl font-bold">
+                    {Number(leaveBalance)}{" "}
+                    {Number(leaveBalance) === 1 ? "day" : "days"}
+                  </p>
+                  <p className="text-xs opacity-70 mt-1">
+                    2 leaves credited each month. Excess leaves marked as LOP.
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                <h2
+                  className="text-lg font-bold mb-1"
+                  style={{ color: "#000080" }}
+                >
+                  Apply for Leave
+                </h2>
+                <p className="text-xs text-gray-500 mb-4">
+                  Max 2 leave applications per month. Additional leaves will be
+                  marked as Loss of Pay (LOP).
+                </p>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="mb-1 block text-sm text-gray-700">
+                        Start Date
+                      </Label>
+                      <Input
+                        type="date"
+                        value={leaveStartDate}
+                        onChange={(e) => setLeaveStartDate(e.target.value)}
+                        data-ocid="support.leave_start.input"
+                      />
+                    </div>
+                    <div>
+                      <Label className="mb-1 block text-sm text-gray-700">
+                        End Date
+                      </Label>
+                      <Input
+                        type="date"
+                        value={leaveEndDate}
+                        onChange={(e) => setLeaveEndDate(e.target.value)}
+                        data-ocid="support.leave_end.input"
+                      />
+                    </div>
+                  </div>
+                  {leaveStartDate &&
+                    leaveEndDate &&
+                    new Date(leaveEndDate) >= new Date(leaveStartDate) && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">
+                          Number of days:{" "}
+                          <strong>
+                            {Math.round(
+                              (new Date(leaveEndDate).getTime() -
+                                new Date(leaveStartDate).getTime()) /
+                                86400000,
+                            ) + 1}
+                          </strong>
+                        </span>
+                        {(() => {
+                          const days =
+                            Math.round(
+                              (new Date(leaveEndDate).getTime() -
+                                new Date(leaveStartDate).getTime()) /
+                                86400000,
+                            ) + 1;
+                          return days > Number(leaveBalance) ? (
+                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                              ⚠ Insufficient balance — will be marked as LOP
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
+                    )}
+                  <div>
+                    <Label className="mb-1 block text-sm text-gray-700">
+                      Reason <span className="text-red-500">*</span>
+                    </Label>
+                    <Textarea
+                      value={leaveReason}
+                      onChange={(e) => setLeaveReason(e.target.value)}
+                      placeholder="Please provide reason for leave..."
+                      rows={3}
+                      data-ocid="support.leave_reason.textarea"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleApplyLeave}
+                    disabled={
+                      leaveSubmitting ||
+                      !leaveStartDate ||
+                      !leaveEndDate ||
+                      !leaveReason.trim()
+                    }
+                    className="text-white w-full sm:w-auto"
+                    style={{ backgroundColor: "#000080" }}
+                    data-ocid="support.leave.submit_button"
+                  >
+                    {leaveSubmitting ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : null}
+                    Submit Leave Application
+                  </Button>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2
+                    className="text-lg font-bold"
+                    style={{ color: "#000080" }}
+                  >
+                    Leave History
+                  </h2>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      employee && loadLeaveData(employee.employeeId)
+                    }
+                    data-ocid="support.leave.secondary_button"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+                  </Button>
+                </div>
+                {leaveRequests.length === 0 ? (
+                  <p
+                    className="text-gray-500 text-sm"
+                    data-ocid="support.leave.empty_state"
+                  >
+                    No leave applications found.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Leave ID</TableHead>
+                          <TableHead>Dates</TableHead>
+                          <TableHead>Days</TableHead>
+                          <TableHead>Reason</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Applied On</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {leaveRequests.map((lr, idx) => (
+                          <TableRow
+                            key={lr.id}
+                            data-ocid={`support.leave.item.${idx + 1}`}
+                          >
+                            <TableCell className="font-mono text-xs">
+                              {lr.id.slice(0, 8)}...
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {lr.startDate} → {lr.endDate}
+                            </TableCell>
+                            <TableCell>{Number(lr.numberOfDays)}</TableCell>
+                            <TableCell className="max-w-32 truncate text-xs">
+                              {lr.reason}
+                            </TableCell>
+                            <TableCell>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  lr.status === "approved"
+                                    ? "bg-green-100 text-green-800"
+                                    : lr.status === "rejected"
+                                      ? "bg-red-100 text-red-800"
+                                      : lr.status === "lop"
+                                        ? "bg-orange-100 text-orange-800"
+                                        : "bg-yellow-100 text-yellow-800"
+                                }`}
+                              >
+                                {lr.status === "lop"
+                                  ? "LOP"
+                                  : lr.status.charAt(0).toUpperCase() +
+                                    lr.status.slice(1)}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {new Date(
+                                Number(lr.requestedAt) / 1_000_000,
+                              ).toLocaleDateString("en-IN")}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {section === "profile" && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2

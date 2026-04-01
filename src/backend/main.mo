@@ -162,7 +162,7 @@ actor {
     startDate : Text;
     endDate : Text;
     numberOfDays : Nat;
-    status : Text; // pending | approved | rejected | lop
+    status : Text;
     requestedAt : Time.Time;
     approvedAt : ?Time.Time;
   };
@@ -170,7 +170,7 @@ actor {
   public type LeaveBalance = {
     employeeId : Text;
     balance : Nat;
-    lastCreditedMonth : Text; // "YYYY-MM"
+    lastCreditedMonth : Text;
   };
 
   // Internal base type for stable upgrade compat
@@ -249,7 +249,6 @@ actor {
     else { "LV" # s };
   };
 
-  // Extract the first `n` characters of a Text value
   func textPrefix(t : Text, n : Nat) : Text {
     var result = "";
     var i = 0;
@@ -298,7 +297,6 @@ actor {
     };
   };
 
-  // Get or initialize leave balance, auto-crediting 2 leaves for new month
   func getOrInitBalance(employeeId : Text, currentMonth : Text) : LeaveBalance {
     switch (leaveBalances.get(employeeId)) {
       case null {
@@ -467,7 +465,7 @@ actor {
     let empId = formatEmployeeId(nextEmployeeId);
     let base : EmployeeBase = {
       employeeId    = empId;
-      passwordHash  = "SysTrans";
+      passwordHash  = "Goodluck1";
       firstName     = input.firstName;
       lastName      = input.lastName;
       dob           = input.dob;
@@ -482,10 +480,10 @@ actor {
       salary        = input.salary;
     };
     let extra : EmployeeExtra = {
-      email            = input.email;
-      mobile           = input.mobile;
-      city             = input.city;
-      state            = input.state;
+      email  = input.email;
+      mobile = input.mobile;
+      city   = input.city;
+      state  = input.state;
       profilePhotoFileId = "";
     };
     employees.add(empId, base);
@@ -527,16 +525,12 @@ actor {
           position      = data.position;
           salary        = data.salary;
         };
-        let oldExtra = switch (employeeExtras.get(id)) {
-          case null { { email = ""; mobile = ""; city = ""; state = ""; profilePhotoFileId = "" } };
-          case (?e) { e };
-        };
         let extra : EmployeeExtra = {
-          email            = data.email;
-          mobile           = data.mobile;
-          city             = data.city;
-          state            = data.state;
-          profilePhotoFileId = oldExtra.profilePhotoFileId;
+          email  = data.email;
+          mobile = data.mobile;
+          city   = data.city;
+          state  = data.state;
+          profilePhotoFileId = "";
         };
         employees.add(id, base);
         employeeExtras.add(id, extra);
@@ -703,7 +697,6 @@ actor {
     let currentMonth = getCurrentMonth();
     let bal = getOrInitBalance(employeeId, currentMonth);
 
-    // Count non-LOP leaves applied this month using textPrefix helper
     let thisMonthLeaves = leaveRequests.values().toArray().filter(
       func(lr : LeaveRequest) : Bool {
         lr.employeeId == employeeId and
@@ -744,9 +737,10 @@ actor {
     };
   };
 
-  public shared func initOrRefreshLeaveBalance(employeeId : Text) : async LeaveBalance {
+  public shared func initOrRefreshLeaveBalance(employeeId : Text) : async Nat {
     let currentMonth = getCurrentMonth();
-    getOrInitBalance(employeeId, currentMonth);
+    let bal = getOrInitBalance(employeeId, currentMonth);
+    bal.balance;
   };
 
   public query func getLeavesByEmployee(employeeId : Text) : async [LeaveRequest] {
@@ -769,7 +763,6 @@ actor {
           switch (leaveBalances.get(req.employeeId)) {
             case null {};
             case (?bal) {
-              // Safe subtraction: guard ensures balance >= numberOfDays
               let newBal : Nat = if (bal.balance > req.numberOfDays) {
                 bal.balance - req.numberOfDays
               } else {

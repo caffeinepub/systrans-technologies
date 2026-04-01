@@ -123,6 +123,17 @@ export const MailConfig = IDL.Record({
   'contactTemplate' : MailTemplate,
   'roiTemplate' : MailTemplate,
 });
+export const LeaveRequest = IDL.Record({
+  'id' : IDL.Text,
+  'employeeId' : IDL.Text,
+  'reason' : IDL.Text,
+  'startDate' : IDL.Text,
+  'endDate' : IDL.Text,
+  'numberOfDays' : IDL.Nat,
+  'status' : IDL.Text,
+  'requestedAt' : Time,
+  'approvedAt' : IDL.Opt(Time),
+});
 
 export const idlService = IDL.Service({
   '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -201,6 +212,16 @@ export const idlService = IDL.Service({
   'getAllROINewLeads' : IDL.Func([], [IDL.Vec(ROINewLead)], ['query']),
   'getAllTickets' : IDL.Func([], [IDL.Vec(Ticket)], ['query']),
   'getAllTimesheets' : IDL.Func([], [IDL.Vec(TimesheetEntry)], ['query']),
+  'getAllLeaveRequests' : IDL.Func([], [IDL.Vec(LeaveRequest)], ['query']),
+  'getLeavesByEmployee' : IDL.Func([IDL.Text], [IDL.Vec(LeaveRequest)], ['query']),
+  'getLeaveBalance' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+  'initOrRefreshLeaveBalance' : IDL.Func([IDL.Text], [IDL.Nat], []),
+  'applyLeave' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Nat],
+      [LeaveRequest],
+      [],
+    ),
+  'approveLeaveRequest' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getEmployee' : IDL.Func([IDL.Text], [IDL.Opt(Employee)], ['query']),
@@ -355,6 +376,17 @@ export const idlFactory = ({ IDL }) => {
     'contactTemplate' : MailTemplate,
     'roiTemplate' : MailTemplate,
   });
+  const LeaveRequest = IDL.Record({
+    'id' : IDL.Text,
+    'employeeId' : IDL.Text,
+    'reason' : IDL.Text,
+    'startDate' : IDL.Text,
+    'endDate' : IDL.Text,
+    'numberOfDays' : IDL.Nat,
+    'status' : IDL.Text,
+    'requestedAt' : Time,
+    'approvedAt' : IDL.Opt(Time),
+  });
 
   return IDL.Service({
     '_caffeineStorageBlobIsLive' : IDL.Func(
@@ -441,6 +473,16 @@ export const idlFactory = ({ IDL }) => {
     'getAllROINewLeads' : IDL.Func([], [IDL.Vec(ROINewLead)], ['query']),
     'getAllTickets' : IDL.Func([], [IDL.Vec(Ticket)], ['query']),
     'getAllTimesheets' : IDL.Func([], [IDL.Vec(TimesheetEntry)], ['query']),
+    'getAllLeaveRequests' : IDL.Func([], [IDL.Vec(LeaveRequest)], ['query']),
+    'getLeavesByEmployee' : IDL.Func([IDL.Text], [IDL.Vec(LeaveRequest)], ['query']),
+    'getLeaveBalance' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+    'initOrRefreshLeaveBalance' : IDL.Func([IDL.Text], [IDL.Nat], []),
+    'applyLeave' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Nat],
+        [LeaveRequest],
+        [],
+      ),
+    'approveLeaveRequest' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getEmployee' : IDL.Func([IDL.Text], [IDL.Opt(Employee)], ['query']),

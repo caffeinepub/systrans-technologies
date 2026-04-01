@@ -206,6 +206,18 @@ export enum UserRole {
     user = "user",
     guest = "guest"
 }
+export interface LeaveRequest {
+    id: string;
+    employeeId: string;
+    reason: string;
+    startDate: string;
+    endDate: string;
+    numberOfDays: bigint;
+    status: string;
+    requestedAt: Time;
+    approvedAt?: Time;
+}
+
 export interface backendInterface {
     _caffeineStorageBlobIsLive(hash: Uint8Array): Promise<boolean>;
     _caffeineStorageBlobsToDelete(): Promise<Array<Uint8Array>>;
@@ -1007,6 +1019,91 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getAllLeaveRequests(): Promise<Array<LeaveRequest>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAllLeaveRequests();
+                return result.map(from_candid_LeaveRequest);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAllLeaveRequests();
+            return result.map(from_candid_LeaveRequest);
+        }
+    }
+    async getLeavesByEmployee(arg0: string): Promise<Array<LeaveRequest>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getLeavesByEmployee(arg0);
+                return result.map(from_candid_LeaveRequest);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getLeavesByEmployee(arg0);
+            return result.map(from_candid_LeaveRequest);
+        }
+    }
+    async getLeaveBalance(arg0: string): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getLeaveBalance(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getLeaveBalance(arg0);
+            return result;
+        }
+    }
+    async initOrRefreshLeaveBalance(arg0: string): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.initOrRefreshLeaveBalance(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.initOrRefreshLeaveBalance(arg0);
+            return result;
+        }
+    }
+    async applyLeave(arg0: string, arg1: string, arg2: string, arg3: string, arg4: bigint): Promise<LeaveRequest> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.applyLeave(arg0, arg1, arg2, arg3, arg4);
+                return from_candid_LeaveRequest(result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.applyLeave(arg0, arg1, arg2, arg3, arg4);
+            return from_candid_LeaveRequest(result);
+        }
+    }
+    async approveLeaveRequest(arg0: string, arg1: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.approveLeaveRequest(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.approveLeaveRequest(arg0, arg1);
+            return result;
+        }
+    }
+
 }
 function from_candid_Announcement(value: import('./declarations/backend.did.d.ts').Announcement): Announcement {
     return {
@@ -1018,6 +1115,20 @@ function from_candid_Announcement(value: import('./declarations/backend.did.d.ts
         createdAt: value.createdAt,
     };
 }
+function from_candid_LeaveRequest(value: import('./declarations/backend.did.d.ts').LeaveRequest): LeaveRequest {
+    return {
+        id: value.id,
+        employeeId: value.employeeId,
+        reason: value.reason,
+        startDate: value.startDate,
+        endDate: value.endDate,
+        numberOfDays: value.numberOfDays,
+        status: value.status,
+        requestedAt: value.requestedAt,
+        approvedAt: value.approvedAt.length > 0 ? value.approvedAt[0] : undefined,
+    };
+}
+
 function from_candid_Ticket_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Ticket): Ticket {
     return from_candid_record_n15(_uploadFile, _downloadFile, value);
 }

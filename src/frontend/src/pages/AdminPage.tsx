@@ -2909,26 +2909,12 @@ function AdminTicketsTab() {
   );
 }
 
-interface LeaveRequest {
-  id: string;
-  employeeId: string;
-  reason: string;
-  startDate: string;
-  endDate: string;
-  numberOfDays: bigint;
-  status: string;
-  requestedAt: bigint;
-  approvedAt: [] | [bigint];
-}
-
-interface BackendWithLeave extends FullBackendInterface {
-  getAllLeaveRequests(): Promise<LeaveRequest[]>;
-  approveLeaveRequest(leaveId: string, status: string): Promise<boolean>;
-}
+type BackendWithLeave = FullBackendInterface;
+type LeaveRequest = import("../backend").LeaveRequest;
 
 function AdminLeaveTab() {
   const { actor: _actor } = useActor();
-  const actor = _actor as unknown as BackendWithLeave | null;
+  const actor = _actor as BackendWithLeave | null;
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [employees, setEmployees] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -2939,7 +2925,7 @@ function AdminLeaveTab() {
     setLoading(true);
     try {
       const [leavesData, empsData] = await Promise.all([
-        (actor as unknown as BackendWithLeave).getAllLeaveRequests(),
+        actor.getAllLeaveRequests(),
         actor.getAllEmployees(),
       ]);
       setLeaves(leavesData);
@@ -2961,7 +2947,7 @@ function AdminLeaveTab() {
       setLoading(true);
       try {
         const [leavesData, empsData] = await Promise.all([
-          (actor as unknown as BackendWithLeave).getAllLeaveRequests(),
+          actor.getAllLeaveRequests(),
           actor.getAllEmployees(),
         ]);
         setLeaves(leavesData);

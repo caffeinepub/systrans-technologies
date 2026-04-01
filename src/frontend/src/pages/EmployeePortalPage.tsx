@@ -44,30 +44,8 @@ import type {
 import { useActor } from "../hooks/useActor";
 import { useFileUpload } from "../hooks/useFileUpload";
 
-interface LeaveRequest {
-  id: string;
-  employeeId: string;
-  reason: string;
-  startDate: string;
-  endDate: string;
-  numberOfDays: bigint;
-  status: string;
-  requestedAt: bigint;
-  approvedAt: [] | [bigint];
-}
-
-interface BackendWithLeave extends FullBackendInterface {
-  initOrRefreshLeaveBalance(employeeId: string): Promise<bigint>;
-  getLeaveBalance(employeeId: string): Promise<bigint>;
-  applyLeave(
-    employeeId: string,
-    reason: string,
-    startDate: string,
-    endDate: string,
-    numberOfDays: bigint,
-  ): Promise<LeaveRequest>;
-  getLeavesByEmployee(employeeId: string): Promise<LeaveRequest[]>;
-}
+type BackendWithLeave = FullBackendInterface;
+type LeaveRequest = import("../backend").LeaveRequest;
 
 type Section =
   | "timesheet"
@@ -90,7 +68,7 @@ function statusColor(status: string): string {
 
 export default function EmployeePortalPage() {
   const { actor: _actor } = useActor();
-  const actor = _actor as unknown as BackendWithLeave | null;
+  const actor = _actor as BackendWithLeave | null;
   const { getFileUrl } = useFileUpload();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loginId, setLoginId] = useState("");
@@ -563,6 +541,7 @@ export default function EmployeePortalPage() {
                 { id: "timesheet", label: "Timesheet", icon: Timer },
                 { id: "raise-ticket", label: "Raise Ticket", icon: Ticket },
                 { id: "my-tickets", label: "My Tickets", icon: ClipboardList },
+                { id: "apply-leave", label: "Apply Leave", icon: CalendarDays },
                 {
                   id: "change-password",
                   label: "Change Password",

@@ -116,11 +116,6 @@ export interface LeaveRequest {
   'requestedAt' : Time,
   'approvedAt' : [] | [Time],
 }
-export interface LeaveBalance {
-  'employeeId' : string,
-  'balance' : bigint,
-  'lastCreditedMonth' : string,
-}
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -184,7 +179,7 @@ export interface _SERVICE {
   'getAllLeaveRequests' : ActorMethod<[], Array<LeaveRequest>>,
   'getLeavesByEmployee' : ActorMethod<[string], Array<LeaveRequest>>,
   'getLeaveBalance' : ActorMethod<[string], bigint>,
-  'initOrRefreshLeaveBalance' : ActorMethod<[string], LeaveBalance>,
+  'initOrRefreshLeaveBalance' : ActorMethod<[string], bigint>,
   'applyLeave' : ActorMethod<[string, string, string, string, bigint], LeaveRequest>,
   'approveLeaveRequest' : ActorMethod<[string, string], boolean>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,

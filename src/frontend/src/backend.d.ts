@@ -95,6 +95,17 @@ export interface Announcement {
     mediaType: string;
     createdAt: Time;
 }
+export interface LeaveRequest {
+    id: string;
+    employeeId: string;
+    reason: string;
+    startDate: string;
+    endDate: string;
+    numberOfDays: bigint;
+    status: string;
+    requestedAt: Time;
+    approvedAt?: Time;
+}
 export interface UserProfile {
     name: string;
 }
@@ -139,6 +150,12 @@ export interface backendInterface {
     getAllROINewLeads(): Promise<Array<ROINewLead>>;
     getAllTickets(): Promise<Array<Ticket>>;
     getAllTimesheets(): Promise<Array<TimesheetEntry>>;
+    getAllLeaveRequests(): Promise<Array<LeaveRequest>>;
+    getLeavesByEmployee(employeeId: string): Promise<Array<LeaveRequest>>;
+    getLeaveBalance(employeeId: string): Promise<bigint>;
+    initOrRefreshLeaveBalance(employeeId: string): Promise<bigint>;
+    applyLeave(employeeId: string, reason: string, startDate: string, endDate: string, numberOfDays: bigint): Promise<LeaveRequest>;
+    approveLeaveRequest(leaveId: string, status: string): Promise<boolean>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getEmployee(id: string): Promise<Employee | null>;

@@ -550,7 +550,7 @@ persistent actor {
     };
   };
 
-  public query func employeeLogin(employeeId : Text, password : Text) : async ?Employee {
+  public shared func employeeLogin(employeeId : Text, password : Text) : async ?Employee {
     switch (employees.get(employeeId)) {
       case null { null };
       case (?base) {

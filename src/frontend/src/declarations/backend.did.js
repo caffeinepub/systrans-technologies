@@ -191,7 +191,7 @@ export const idlService = IDL.Service({
   'employeeLogin' : IDL.Func(
       [IDL.Text, IDL.Text],
       [IDL.Opt(Employee)],
-      ['query'],
+      [],
     ),
   'getAdminPasswordHash' : IDL.Func([], [IDL.Text], ['query']),
   'getAllActiveJobPositions' : IDL.Func([], [IDL.Vec(JobPosition)], ['query']),
@@ -444,7 +444,7 @@ export const idlFactory = ({ IDL }) => {
     'employeeLogin' : IDL.Func(
         [IDL.Text, IDL.Text],
         [IDL.Opt(Employee)],
-        ['query'],
+        [],
       ),
     'getAdminPasswordHash' : IDL.Func([], [IDL.Text], ['query']),
     'getAllActiveJobPositions' : IDL.Func(

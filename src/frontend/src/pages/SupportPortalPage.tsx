@@ -228,8 +228,9 @@ export default function SupportPortalPage() {
         loadAnnouncements();
         loadLeaveData(emp.employeeId);
       }
-    } catch {
-      setLoginError("Login failed. Please try again.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setLoginError(`Login failed: ${msg}`);
     } finally {
       setLoginLoading(false);
     }

@@ -10,7 +10,7 @@ import MixinStorage "blob-storage/Mixin";
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 
-actor {
+persistent actor {
   module JobPosition {
     public func compare(jp1 : JobPosition, jp2 : JobPosition) : Order.Order {
       Text.compare(jp1.id, jp2.id);

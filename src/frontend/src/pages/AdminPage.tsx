@@ -2917,8 +2917,16 @@ function AdminLeaveTab() {
   const actor = _actor as BackendWithLeave | null;
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [employees, setEmployees] = useState<Record<string, string>>({});
+  const [employeeList, setEmployeeList] = useState<
+    { id: string; name: string }[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   async function loadData() {
     if (!actor) return;
@@ -2930,10 +2938,16 @@ function AdminLeaveTab() {
       ]);
       setLeaves(leavesData);
       const empMap: Record<string, string> = {};
+      const empList: { id: string; name: string }[] = [];
       for (const e of empsData) {
         empMap[e.employeeId] = `${e.firstName} ${e.lastName}`;
+        empList.push({
+          id: e.employeeId,
+          name: `${e.firstName} ${e.lastName} (${e.employeeId})`,
+        });
       }
       setEmployees(empMap);
+      setEmployeeList(empList);
     } catch {
       toast.error("Failed to load leave requests.");
     } finally {
@@ -2941,29 +2955,11 @@ function AdminLeaveTab() {
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadData captured
   useEffect(() => {
     if (!actor) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const [leavesData, empsData] = await Promise.all([
-          actor.getAllLeaveRequests(),
-          actor.getAllEmployees(),
-        ]);
-        setLeaves(leavesData);
-        const empMap: Record<string, string> = {};
-        for (const e of empsData) {
-          empMap[e.employeeId] = `${e.firstName} ${e.lastName}`;
-        }
-        setEmployees(empMap);
-      } catch {
-        toast.error("Failed to load leave requests.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actor]);
+    loadData();
+  }, [actor]); // eslint-disable-line
 
   async function handleAction(leaveId: string, status: string) {
     if (!actor) return;
@@ -2999,9 +2995,26 @@ function AdminLeaveTab() {
     );
   };
 
+  // Filter leaves by selected employee and selected month
+  const filteredLeaves = leaves.filter((lr) => {
+    const empMatch =
+      selectedEmployee === "all" || lr.employeeId === selectedEmployee;
+    const monthMatch = lr.startDate.startsWith(selectedMonth);
+    return empMatch && monthMatch;
+  });
+
+  // Count stats for filtered set
+  const approvedCount = filteredLeaves
+    .filter((lr) => lr.status === "approved")
+    .reduce((sum, lr) => sum + Number(lr.numberOfDays), 0);
+  const lopCount = filteredLeaves
+    .filter((lr) => lr.status === "lop")
+    .reduce((sum, lr) => sum + Number(lr.numberOfDays), 0);
+  const totalTaken = approvedCount + lopCount;
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <h2 className="text-xl font-bold" style={{ color: "#000080" }}>
           Leave Requests
         </h2>
@@ -3018,6 +3031,62 @@ function AdminLeaveTab() {
           Refresh
         </Button>
       </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <div>
+          {/* biome-ignore lint/a11y/noLabelWithoutControl: wrapping label */}
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Filter by Employee
+          </label>
+          <select
+            className="border rounded px-2 py-1.5 text-sm min-w-[200px]"
+            value={selectedEmployee}
+            onChange={(e) => setSelectedEmployee(e.target.value)}
+          >
+            <option value="all">All Employees</option>
+            {employeeList.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          {/* biome-ignore lint/a11y/noLabelWithoutControl: wrapping label */}
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Month
+          </label>
+          <input
+            type="month"
+            className="border rounded px-2 py-1.5 text-sm"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+        <div className="rounded-lg border bg-blue-50 p-3">
+          <p className="text-xs text-gray-500">Total Leaves Taken</p>
+          <p className="text-2xl font-bold" style={{ color: "#000080" }}>
+            {totalTaken}
+          </p>
+          <p className="text-xs text-gray-400">days (approved + LOP)</p>
+        </div>
+        <div className="rounded-lg border bg-green-50 p-3">
+          <p className="text-xs text-gray-500">Approved Leaves</p>
+          <p className="text-2xl font-bold text-green-700">{approvedCount}</p>
+          <p className="text-xs text-gray-400">days this month</p>
+        </div>
+        <div className="rounded-lg border bg-orange-50 p-3">
+          <p className="text-xs text-gray-500">LOP Count</p>
+          <p className="text-2xl font-bold text-orange-600">{lopCount}</p>
+          <p className="text-xs text-gray-400">days this month</p>
+        </div>
+      </div>
+
       {loading ? (
         <div
           className="flex items-center gap-2 text-gray-500 py-8"
@@ -3025,12 +3094,12 @@ function AdminLeaveTab() {
         >
           <Loader2 className="h-5 w-5 animate-spin" /> Loading...
         </div>
-      ) : leaves.length === 0 ? (
+      ) : filteredLeaves.length === 0 ? (
         <p
           className="text-gray-500 py-8 text-center"
           data-ocid="admin.leave.empty_state"
         >
-          No leave requests found.
+          No leave requests found for the selected filters.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -3049,7 +3118,7 @@ function AdminLeaveTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {leaves.map((lr, idx) => (
+              {filteredLeaves.map((lr, idx) => (
                 <TableRow key={lr.id} data-ocid={`admin.leave.item.${idx + 1}`}>
                   <TableCell>
                     <div>

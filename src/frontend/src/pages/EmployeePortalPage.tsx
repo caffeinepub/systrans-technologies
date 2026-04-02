@@ -189,12 +189,17 @@ export default function EmployeePortalPage() {
     setLoginError("");
     try {
       const result = await actor.employeeLogin(loginId.trim(), loginPass);
-      if (result) {
-        setEmployee(result);
-        loadTodayEntry(result.employeeId);
-        loadMyTickets(result.employeeId);
+      const emp = Array.isArray(result)
+        ? result.length > 0
+          ? result[0]
+          : null
+        : result;
+      if (emp) {
+        setEmployee(emp);
+        loadTodayEntry(emp.employeeId);
+        loadMyTickets(emp.employeeId);
         loadAnnouncements();
-        loadLeaveData(result.employeeId);
+        loadLeaveData(emp.employeeId);
       } else {
         setLoginError("Invalid credentials. Please try again.");
       }

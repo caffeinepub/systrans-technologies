@@ -2923,10 +2923,7 @@ function AdminLeaveTab() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
 
   async function loadData() {
     if (!actor) return;
@@ -2999,7 +2996,7 @@ function AdminLeaveTab() {
   const filteredLeaves = leaves.filter((lr) => {
     const empMatch =
       selectedEmployee === "all" || lr.employeeId === selectedEmployee;
-    const monthMatch = lr.startDate.startsWith(selectedMonth);
+    const monthMatch = !selectedMonth || lr.startDate.startsWith(selectedMonth);
     return empMatch && monthMatch;
   });
 
@@ -3057,12 +3054,23 @@ function AdminLeaveTab() {
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Month
           </label>
-          <input
-            type="month"
-            className="border rounded px-2 py-1.5 text-sm"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-          />
+          <div className="flex gap-1 items-center">
+            <input
+              type="month"
+              className="border rounded px-2 py-1.5 text-sm"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            />
+            {selectedMonth && (
+              <button
+                type="button"
+                className="text-xs text-gray-500 underline"
+                onClick={() => setSelectedMonth("")}
+              >
+                All months
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -212,16 +212,21 @@ export default function SupportPortalPage() {
     setLoginError("");
     try {
       const result = await actor.employeeLogin(loginId.trim(), loginPass);
-      if (!result) {
+      const emp = Array.isArray(result)
+        ? result.length > 0
+          ? result[0]
+          : null
+        : result;
+      if (!emp) {
         setLoginError("Invalid credentials. Please try again.");
-      } else if (result.role !== "support") {
+      } else if (emp.role !== "support") {
         setLoginError("Access denied. Support role required.");
       } else {
-        setEmployee(result);
+        setEmployee(emp);
         loadTickets();
-        loadTodayEntry(result.employeeId);
+        loadTodayEntry(emp.employeeId);
         loadAnnouncements();
-        loadLeaveData(result.employeeId);
+        loadLeaveData(emp.employeeId);
       }
     } catch {
       setLoginError("Login failed. Please try again.");
